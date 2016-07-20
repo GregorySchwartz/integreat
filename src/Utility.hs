@@ -71,9 +71,9 @@ removeMatchFilter :: (VS.Storable a)
                   -> Vector a
                   -> Vector a
                   -> (Vector a, Vector a)
-removeMatchFilter !f !x !y = ( filterIdx y
-                       , filterIdx y
-                       )
+removeMatchFilter !f !x !y = ( filterIdx x
+                             , filterIdx y
+                             )
   where
     filterIdx = VS.ifilter (\i v -> not . Set.member i $ badIdx)
     badIdx    = Set.fromList
