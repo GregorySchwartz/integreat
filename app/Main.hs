@@ -1,7 +1,8 @@
 {- integrate
 Gregory W. Schwartz
 
-Integrate data.
+Integrate data from multiple sources to find consistent (or inconsistent)
+entities.
 -}
 
 {-# LANGUAGE BangPatterns #-}
@@ -160,5 +161,6 @@ main = execParser opts >>= mainFunc
   where
     opts = info (helper <*> options)
       ( fullDesc
-     <> progDesc "Integrate data."
+     <> progDesc "Integrate data from multiple sources to find consistent\
+                 \ (or inconsistent) entities."
      <> header "integrate, Gregory W. Schwartz" )
