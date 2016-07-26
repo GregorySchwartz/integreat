@@ -14,6 +14,7 @@ entities.
 module Main where
 
 -- Standard
+import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import Data.Monoid
@@ -42,11 +43,11 @@ data Options = Options { dataInput     :: String
                                       <?> "(FILE) The input file containing the data intentisities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base title for the experiment, \"data set\"), dataReplicate is the replicate in that experiment that the entity is from, vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
                        , vertexInput   :: Maybe String
                                       <?> "(FILE) The input file containing similarities between entities. Follows the format: vertexLevel1,vertexLevel2, vertex1,vertex2,similarity. vertexLevel1 is the level (the base title for the experiment, \"data set\") that vertex1 is from, vertexLevel2 is the level that vertex2 is from, and the similarity is a number representing the similarity between those two entities. If not specified, then the same entity (determined by vertex in data-input) will have a similarity of 1, different entities will have a similarity of 0."
-                       , method        :: String
+                       , method        :: Maybe String
                                       <?> "([CosineSimilarity] | RandomWalker) The method to get integrated vertex similarity between  levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
-                       , walkerRestart :: Double
+                       , walkerRestart :: Maybe Double
                                       <?> "([0.05] | PROBABILITY) For the random walker algorithm, the probability of making  a jump to a random vertex. Recommended to be the ratio of  the total number of vertices in the top 99% smallest  subnetworks to the total number of nodes in the reduced  product graph (Jeong, 2015)."
-                       , steps         :: Int
+                       , steps         :: Maybe Int
                                       <?> "([10000] | STEPS) For the random walker algorithm, the number of steps to take  before stopping."
                        }
                deriving (Generic)
@@ -100,11 +101,21 @@ main = do
                    $ levels
 
     nodeCorrScores <- integrate
-                        (read . unHelpful . method $ opts)
+                        ( fromMaybe CosineSimilarity
+                        . fmap read
+                        . unHelpful
+                        . method
+                        $ opts
+                        )
                         vertexSimMap
                         edgeSimMap
-                        (WalkerRestart . unHelpful . walkerRestart $ opts)
-                        (Counter . unHelpful . steps $ opts)
+                        ( WalkerRestart
+                        . fromMaybe 0.05
+                        . unHelpful
+                        . walkerRestart
+                        $ opts
+                        )
+                        (Counter . fromMaybe 10000 . unHelpful . steps $ opts)
 
     T.putStr . printNodeCorrScores idVec $ nodeCorrScores
 
