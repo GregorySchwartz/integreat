@@ -4,6 +4,7 @@ Gregory W. Schwartz
 Collections the types used in the program
 -}
 
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -81,26 +82,26 @@ newtype Walker a =
              , MonadState WalkerState
              )
 
-data Entity = Entity { _entityID    :: ID
-                     , _dataSetName :: DataSetName
-                     , _levelName   :: LevelName
-                     , _entityValue :: Double
+data Entity = Entity { _entityID    :: !ID
+                     , _dataSetName :: !DataSetName
+                     , _levelName   :: !LevelName
+                     , _entityValue :: !Double
                      }
 
 data Environment =
-    Environment { edgeMat1  :: EdgeSimMatrix
-                , edgeMat2  :: EdgeSimMatrix
-                , vertexMat :: VertexSimMatrix
-                , restart   :: WalkerRestart
+    Environment { edgeMat1  :: !EdgeSimMatrix
+                , edgeMat2  :: !EdgeSimMatrix
+                , vertexMat :: !VertexSimMatrix
+                , restart   :: !WalkerRestart
                 }
 
 data WalkerChoice = Same | DifferentLeft | DifferentRight
 data Method       = CosineSimilarity | RandomWalker deriving (Eq, Read, Show)
 
-data DataEntry    = DataEntry { dataLevel     :: T.Text
-                              , dataReplicate :: T.Text
-                              , vertex        :: T.Text
-                              , intensity     :: Double
+data DataEntry    = DataEntry { dataLevel     :: !T.Text
+                              , dataReplicate :: !T.Text
+                              , vertex        :: !T.Text
+                              , intensity     :: !Double
                               }
                     deriving (Generic)
 
@@ -108,11 +109,11 @@ instance FromNamedRecord DataEntry
 instance ToNamedRecord DataEntry
 instance DefaultOrdered DataEntry
 
-data VertexEntry  = VertexEntry { vertexLevel1 :: T.Text
-                                , vertexLevel2 :: T.Text
-                                , vertex1      :: T.Text
-                                , vertex2      :: T.Text
-                                , similarity   :: Double
+data VertexEntry  = VertexEntry { vertexLevel1 :: !T.Text
+                                , vertexLevel2 :: !T.Text
+                                , vertex1      :: !T.Text
+                                , vertex2      :: !T.Text
+                                , similarity   :: !Double
                                 }
                     deriving (Generic)
 
