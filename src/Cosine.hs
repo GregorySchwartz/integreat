@@ -33,19 +33,23 @@ cosineIntegrate :: VertexSimMap
                 -> NodeCorrScores
 cosineIntegrate vMap l1 l2 e1 e2 =
     NodeCorrScores
-        . VS.map ( \x -> uncurry cosineSim
-                       . removeMatchFilter (== -5) (newE1 ! x)
-                       $ (newE2 ! x)
-                 )
-        . VS.fromList
-        $ [0 .. rows (unEdgeSimMatrix e1) - 1]
+        . VS.map applyCosine
+        . VS.enumFromN 0
+        . rows
+        . unEdgeSimMatrix
+        $ e1
   where
+    applyCosine x =
+        (\ (!xs, !ys) -> cosineSim xs ys
+                       / (VS.length xs / (rows . unEdgeSimMatrix $ e1))
+        )
+            . removeMatchFilter (== -5) (newE1 ! x)
+            $ (newE2 ! x)
     newE1     = unEdgeSimMatrix . cosineUpdateSimMat e1 $ changes
     newE2     = unEdgeSimMatrix . cosineUpdateSimMat e2 $ changes
     changes   = V.toList
               . V.imap (\i v -> ((i, i), v))
-              . V.fromList
-              . VS.toList
+              . VS.convert
               . takeDiag
               . unVertexSimMatrix
               $ vertexSim

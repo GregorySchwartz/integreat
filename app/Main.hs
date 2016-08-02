@@ -18,6 +18,7 @@ import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import Data.Monoid
+import Control.Parallel.Strategies
 import System.IO
 
 -- Cabal
@@ -75,7 +76,7 @@ main = do
     let levels       =
             entitiesToLevels . datasToEntities . V.toList $ dataEntries
         unifiedData  = unifyAllLevels . fmap snd $ levels
-        levelNames   = Set.toList . Set.fromList . map fst $ levels
+        levelNames   = Set.toList . Set.fromList . fmap fst $ levels
         idMap        = getIDMap unifiedData
         idVec        = getIDVec unifiedData
 

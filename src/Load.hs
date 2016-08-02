@@ -64,7 +64,8 @@ unifyAllLevels = UnifiedData . Map.unionsWith (Seq.><) . fmap unLevel
 
 -- | Get a vector of all IDs for easy indexing.
 getIDVec :: UnifiedData -> IDVec
-getIDVec = IDVec . V.fromList . Map.keys . unUnifiedData
+getIDVec =
+    IDVec . (\x -> V.fromList . Map.keys $ x) . unUnifiedData
 
 -- | Get a map of all IDs for conversion.
 getIDMap :: UnifiedData -> IDMap

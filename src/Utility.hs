@@ -16,10 +16,13 @@ module Utility
     , applyRows
     , avgVec
     , getVertexSim
+    , pairs
+    , flipToo
     ) where
 
 -- Standard
 import Data.Maybe
+import Data.List
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
@@ -108,3 +111,11 @@ getVertexSim l1 l2 (VertexSimMap vMap) =
                    ++ (T.unpack $ unLevelName l)
                    ++ " not found in creating vertex similarity map."
                     )
+
+-- | From http://stackoverflow.com/questions/34044366/how-to-extract-all-unique-pairs-of-a-list-in-haskell, extract the unique pairings of a list and apply a function to them.
+pairs :: (a -> a -> b) -> [a] -> [b]
+pairs f l = [f x y | (x:ys) <- tails l, y <- ys]
+
+-- | Take a tuple index with a value and return it with its flip.
+flipToo :: ((a, a), b) -> [((a, a), b)]
+flipToo all@((!x, !y), !z) = [all, ((y, x), z)]
