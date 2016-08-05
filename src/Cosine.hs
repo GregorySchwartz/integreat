@@ -24,7 +24,8 @@ import Numeric.LinearAlgebra
 import Types
 import Utility
 
--- | Get the cosine similarity of two levels.
+-- | Get the cosine similarity of two levels. Normalize based on the size
+-- of actual data (no missing data) divided by the total amount of data.
 cosineIntegrate :: VertexSimMap
                 -> LevelName
                 -> LevelName
@@ -41,7 +42,7 @@ cosineIntegrate vMap l1 l2 e1 e2 =
   where
     applyCosine x =
         (\ (!xs, !ys) -> cosineSim xs ys
-                       / (VS.length xs / (rows . unEdgeSimMatrix $ e1))
+                       * (VS.length xs /. (rows . unEdgeSimMatrix $ e1))
         )
             . removeMatchFilter (== -5) (newE1 ! x)
             $ (newE2 ! x)
