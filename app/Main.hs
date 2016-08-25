@@ -18,8 +18,8 @@ import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import Data.Monoid
-import Control.Parallel.Strategies
 import System.IO
+import Control.Monad
 
 -- Cabal
 import qualified Data.Vector as V
@@ -27,7 +27,7 @@ import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Csv as CSV
-import Control.Lens
+import qualified Control.Lens as L
 import Options.Generic
 
 -- Local
@@ -41,7 +41,7 @@ import Print
 
 -- | Command line arguments
 data Options = Options { dataInput     :: String
-                                      <?> "(FILE) The input file containing the data intentisities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base title for the experiment, \"data set\"), dataReplicate is the replicate in that experiment that the entity is from, vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
+                                      <?> "(FILE) The input file containing the data intensities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base level for the experiment, like \"proteomic_Myla\" or \"RNA_MyLa\" for instance), dataReplicate is the replicate in that experiment that the entity is from (the name of that data set with the replicate name, like \"RNA_MyLa_1\"), and vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
                        , vertexInput   :: Maybe String
                                       <?> "(FILE) The input file containing similarities between entities. Follows the format: vertexLevel1,vertexLevel2, vertex1,vertex2,similarity. vertexLevel1 is the level (the base title for the experiment, \"data set\") that vertex1 is from, vertexLevel2 is the level that vertex2 is from, and the similarity is a number representing the similarity between those two entities. If not specified, then the same entity (determined by vertex in data-input) will have a similarity of 1, different entities will have a similarity of 0."
                        , method        :: Maybe String
@@ -63,11 +63,7 @@ main = do
 
     let processCsv = snd . either error id
 
-    dataEntries   <- fmap (\x -> processCsv
-                               $ ( CSV.decodeByName x
-                                :: Either String (CSV.Header, V.Vector DataEntry)
-                                 )
-                          )
+    dataEntries   <- fmap (processCsv . CSV.decodeByName)
                    . CL.readFile
                    . unHelpful
                    . dataInput
@@ -80,30 +76,23 @@ main = do
         idMap        = getIDMap unifiedData
         idVec        = getIDVec unifiedData
 
+    let vertexContents =
+            fmap (fmap (processCsv . CSV.decodeByName) . CL.readFile)
+                . unHelpful
+                . vertexInput
+                $ opts
     vertexSimMap <- maybe
                         (return . defVertexSimMap idMap $ levelNames)
                         (fmap (vertexCsvToLevels idMap . V.toList))
-                  . fmap ( fmap ( \x -> processCsv
-                                      $ ( CSV.decodeByName x
-                                       :: Either
-                                            String
-                                            (CSV.Header, V.Vector VertexEntry)
-                                        )
-                                )
-                         . CL.readFile
-                         )
-                  . unHelpful
-                  . vertexInput
-                  $ opts
+                        vertexContents
 
     let edgeSimMap = EdgeSimMap
                    . Map.fromList
-                   . fmap (over _2 (getSimMat (Default (-5)) idMap))
+                   . fmap (L.over L._2 (getSimMat (Default (-5)) idMap))
                    $ levels
 
     nodeCorrScores <- integrate
-                        ( fromMaybe CosineSimilarity
-                        . fmap read
+                        ( maybe CosineSimilarity read
                         . unHelpful
                         . method
                         $ opts
