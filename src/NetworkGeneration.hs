@@ -16,8 +16,6 @@ import Data.Bool
 import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import qualified Data.Foldable as F
-import Control.Parallel.Strategies
-import Debug.Trace
 
 -- Cabal
 import qualified Data.Vector as V
@@ -49,7 +47,6 @@ getSimMat (Default def)
     EdgeSimMatrix
         . assoc (Map.size idMap, Map.size idMap) def
         . concatMap flipToo
-        . withStrategy (parTraversable rpar)
         . pairs getCorr
         . fmap (L.over L._2 (V.fromList . F.toList))
         . Map.toList
