@@ -27,7 +27,7 @@ import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Csv as CSV
-import Control.Lens
+import qualified Control.Lens as L
 import Options.Generic
 
 -- Local
@@ -44,6 +44,8 @@ data Options = Options { dataInput     :: String
                                       <?> "(FILE) The input file containing the data intentisities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base title for the experiment, \"data set\"), dataReplicate is the replicate in that experiment that the entity is from, vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
                        , vertexInput   :: Maybe String
                                       <?> "(FILE) The input file containing similarities between entities. Follows the format: vertexLevel1,vertexLevel2, vertex1,vertex2,similarity. vertexLevel1 is the level (the base title for the experiment, \"data set\") that vertex1 is from, vertexLevel2 is the level that vertex2 is from, and the similarity is a number representing the similarity between those two entities. If not specified, then the same entity (determined by vertex in data-input) will have a similarity of 1, different entities will have a similarity of 0."
+                       , entityDiff  :: Maybe T.Text
+                                    <?> "When comparing entities that are the same, ignore the text after this separator. Used for comparing phosphorylated positions with another level. For example, if we have a strings ARG29 and ARG29_7 that we want to compare, we want to say that their value is the highest in correlation, so this string would be \"_\""
                        , method        :: Maybe String
                                       <?> "([CosineSimilarity] | RandomWalker) The method to get integrated vertex similarity between  levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
                        , walkerRestart :: Maybe Double
@@ -98,7 +100,7 @@ main = do
 
     let edgeSimMap = EdgeSimMap
                    . Map.fromList
-                   . fmap (over _2 (getSimMat (Default (-5)) idMap))
+                   . fmap (L.over L._2 (getSimMat (Default (-5)) idMap))
                    $ levels
 
     nodeCorrScores <- integrate
