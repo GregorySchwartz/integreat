@@ -20,6 +20,7 @@ import qualified Data.Map.Strict as Map
 import Data.Monoid
 import System.IO
 import Control.Monad
+import Debug.Trace
 
 -- Cabal
 import qualified Data.Vector as V

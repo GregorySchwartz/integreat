@@ -36,7 +36,7 @@ newtype Default          = Default { unDefault :: Double }
 newtype Size             = Size Int
 newtype Counter          = Counter Int deriving (Eq, Ord, Num)
 newtype WalkerRestart    = WalkerRestart { unWalkerRestart :: Double }
-newtype DataSetName      = DataSetName T.Text
+newtype DataSetName      = DataSetName T.Text deriving (Show)
 newtype LevelName        = LevelName { unLevelName :: T.Text }
                            deriving (Eq, Ord, Show)
 newtype IDVec            = IDVec { unIDVec :: V.Vector ID }
@@ -87,6 +87,7 @@ data Entity = Entity { _entityID    :: !ID
                      , _levelName   :: !LevelName
                      , _entityValue :: !Double
                      }
+              deriving (Show)
 
 data Environment =
     Environment { edgeMat1  :: !EdgeSimMatrix
