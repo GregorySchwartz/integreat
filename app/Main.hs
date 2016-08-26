@@ -77,6 +77,7 @@ main = do
         levelNames   = Set.toList . Set.fromList . fmap fst $ levels
         idMap        = getIDMap unifiedData
         idVec        = getIDVec unifiedData
+        eDiff        = fmap EntityDiff . unHelpful . entityDiff $ opts
 
     let vertexContents =
             fmap (fmap (processCsv . CSV.decodeByName) . CL.readFile)
@@ -90,7 +91,13 @@ main = do
 
     let edgeSimMap = EdgeSimMap
                    . Map.fromList
-                   . fmap (L.over L._2 (getSimMat (Default (-5)) idMap))
+                   . fmap ( L.over L._2 ( getSimMat
+                                         (Default (-5))
+                                         eDiff
+                                         (MaximumEdge 1)
+                                         idMap
+                                        )
+                          )
                    $ levels
 
     nodeCorrScores <- integrate

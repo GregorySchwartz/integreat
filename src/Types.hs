@@ -33,6 +33,8 @@ import Numeric.LinearAlgebra
 -- Algebraic
 newtype ID               = ID { unID :: T.Text } deriving (Eq, Ord, Show)
 newtype Default          = Default { unDefault :: Double }
+newtype MaximumEdge      = MaximumEdge { unMaximumEdge :: Double }
+newtype EntityDiff       = EntityDiff  { unEntityDiff  :: T.Text }
 newtype Size             = Size Int
 newtype Counter          = Counter Int deriving (Eq, Ord, Num)
 newtype WalkerRestart    = WalkerRestart { unWalkerRestart :: Double }

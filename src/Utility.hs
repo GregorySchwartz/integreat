@@ -18,6 +18,7 @@ module Utility
     , getVertexSim
     , pairs
     , flipToo
+    , sameWithEntityDiff
     ) where
 
 -- Standard
@@ -119,3 +120,13 @@ pairs f l = [f x y | (x:ys) <- tails l, y <- ys]
 -- | Take a tuple index with a value and return it with its flip.
 flipToo :: ((a, a), b) -> [((a, a), b)]
 flipToo all@((!x, !y), !z) = [all, ((y, x), z)]
+
+-- | Check if two entities are actually the same if one contains the entityDiff
+-- while the other does not.
+sameWithEntityDiff :: Maybe EntityDiff -> ID -> ID -> Bool
+sameWithEntityDiff Nothing (ID e1) (ID e2)                           = False
+sameWithEntityDiff (Just (EntityDiff eDiff)) (ID e1) (ID e2)
+    | T.count eDiff e1 == 0 && T.count eDiff e2 == 0                 = False
+    | T.count eDiff e1 > 0 && T.count eDiff e2 > 0                   = False
+    | (head . T.splitOn eDiff $ e1) == (head . T.splitOn eDiff $ e2) = True
+    | otherwise                                                      = False
