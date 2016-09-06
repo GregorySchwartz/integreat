@@ -37,13 +37,13 @@ getSimMat :: Default
           -> Maybe EntityDiff
           -> MaximumEdge
           -> IDMap
-          -> Level
+          -> StandardLevel
           -> EdgeSimMatrix
 getSimMat (Default def)
           entityDiff
           (MaximumEdge maxEdge)
           (IDMap idMap)
-          (Level level) =
+          (StandardLevel level) =
     EdgeSimMatrix
         . assoc (Map.size idMap, Map.size idMap) def
         . concatMap flipToo
@@ -52,11 +52,11 @@ getSimMat (Default def)
         . Map.toList
         $ level
   where
-      getCorr (!k1, !x) (!k2, !y) =
-          ( ( lookupWithError (keyNotFound k1) k1 idMap
-            , lookupWithError (keyNotFound k2) k2 idMap
-            )
-          , bool (correlate x y) maxEdge . sameWithEntityDiff entityDiff k1 $ k2
+      getCorr ((!id1, !idx1), !x) ((!id2, !idx2), !y) =
+          ( (idx1 , idx2)
+          , bool (correlate x y) maxEdge
+          . sameWithEntityDiff entityDiff id1
+          $ id2
           )
       keyNotFound k = "ID: " ++ show k ++ " not found."
 

@@ -97,6 +97,7 @@ main = do
                                          eDiff
                                          (MaximumEdge 1)
                                          idMap
+                                        . standardizeLevel idMap
                                         )
                           )
                    $ levels

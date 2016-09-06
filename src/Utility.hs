@@ -33,6 +33,7 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Text as T
 import Numeric.LinearAlgebra
+import Control.Lens
 
 -- Local
 import Types
@@ -75,15 +76,13 @@ removeMatchFilter :: (VS.Storable a)
                   -> Vector a
                   -> Vector a
                   -> (Vector a, Vector a)
-removeMatchFilter !f !x !y = ( filterIdx x
-                             , filterIdx y
-                             )
+removeMatchFilter f xs = over _2 VS.convert
+                       . over _1 VS.convert
+                       . V.unzip
+                       . filterBad (V.convert xs)
+                       . V.convert
   where
-    filterIdx = VS.ifilter (\i v -> not . Set.member i $ badIdx)
-    badIdx    = Set.fromList
-              . VS.toList
-              . mappend (VS.findIndices f x)
-              . VS.findIndices f $ y
+    filterBad x = V.filter (\(a, b) -> (not . f $ a) && (not . f $ b)) . V.zip x
 
 -- | Apply a folding function to a list of row vectors.
 applyRows :: (Element a, VS.Storable b)

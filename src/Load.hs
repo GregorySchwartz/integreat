@@ -15,6 +15,7 @@ module Load
     , getIDMap
     , defVertexSimMap
     , vertexCsvToLevels
+    , standardizeLevel
     ) where
 
 -- Standard
@@ -119,3 +120,11 @@ vertexCsvToLevels (IDMap idMap) =
     idLookup x =
         lookupWithError ("ID: " ++ T.unpack x ++ " not found.") (ID x) idMap
 
+-- | Convert a level's IDs to be integers based on the universal labeling.
+standardizeLevel :: IDMap -> Level -> StandardLevel
+standardizeLevel (IDMap idMap) =
+    StandardLevel
+        . Map.mapKeys (\ !x -> (x, lookupWithError (keyNotFound x) x idMap))
+        . unLevel
+  where
+    keyNotFound k = "ID: " ++ show k ++ " not found."

@@ -48,6 +48,9 @@ newtype WalkerState      =
 
 newtype DataSet          = DataSet (Map.Map ID Entity)
 newtype Level            = Level { unLevel :: (Map.Map ID (Seq.Seq Entity)) }
+newtype StandardLevel = StandardLevel
+    { unStandardLevel :: (Map.Map (ID, Int) (Seq.Seq Entity))
+    }
 newtype UnifiedData      =
     UnifiedData { unUnifiedData :: (Map.Map ID (Seq.Seq Entity)) }
 
