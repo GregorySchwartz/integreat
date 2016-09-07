@@ -20,6 +20,7 @@ module Load
 
 -- Standard
 import qualified Data.Sequence as Seq
+import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import qualified Data.Foldable as F
 
@@ -46,7 +47,7 @@ dataEntryToEntity x = Entity { _entityID    = ID $ vertex x
                              , _entityValue = intensity x
                              }
 
--- | Convert an collection of entities to levels.
+-- | Convert a collection of entities to levels.
 entitiesToLevels :: [Entity] -> [(LevelName, Level)]
 entitiesToLevels = fmap (L.over L._2 Level)
                  . Map.toAscList
@@ -122,9 +123,27 @@ vertexCsvToLevels (IDMap idMap) =
 
 -- | Convert a level's IDs to be integers based on the universal labeling.
 standardizeLevel :: IDMap -> Level -> StandardLevel
-standardizeLevel (IDMap idMap) =
+standardizeLevel (IDMap idMap) (Level level) =
     StandardLevel
+        . Map.map (flip standardizeDataSets standardDataSets)
         . Map.mapKeys (\ !x -> (x, lookupWithError (keyNotFound x) x idMap))
-        . unLevel
+        $ level
   where
-    keyNotFound k = "ID: " ++ show k ++ " not found."
+    standardDataSets = getStandardDataSets . Level $ level
+    keyNotFound k    = "ID: " ++ show k ++ " not found."
+    
+-- | Unify the ordering of the data for data set entries.
+getStandardDataSets :: Level -> StandardDataSets
+getStandardDataSets = StandardDataSets
+                    . Seq.fromList
+                    . Set.toList
+                    . Set.fromList
+                    . concatMap Map.keys
+                    . Map.elems
+                    . unLevel
+
+-- | Unify the ordering of the data for data set entries.
+standardizeDataSets :: Map.Map DataSetName Entity
+                    -> StandardDataSets
+                    -> (Seq.Seq (Maybe Entity))
+standardizeDataSets m = fmap (flip Map.lookup m) . unStandardDataSets

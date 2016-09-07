@@ -27,7 +27,6 @@ import Data.Maybe
 import Data.List
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
-import qualified Data.Sequence as Seq
 
 -- Cabal
 import qualified Data.Vector as V

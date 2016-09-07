@@ -12,6 +12,7 @@ Collections the types used in the program
 module Types where
 
 -- Standard
+import qualified Data.Sequence as Seq
 import qualified Data.Map.Strict as Map
 import GHC.Generics
 
@@ -46,11 +47,14 @@ newtype WalkerState      =
     WalkerState { unWalkerState :: (Int, Int, TransProbMatrix) }
 
 newtype DataSet          = DataSet (Map.Map ID Entity)
+newtype StandardDataSets = StandardDataSets
+    { unStandardDataSets :: Seq.Seq DataSetName
+    }
 newtype Level = Level
     { unLevel :: (Map.Map ID (Map.Map DataSetName Entity))
     }
 newtype StandardLevel = StandardLevel
-    { unStandardLevel :: (Map.Map (ID, Int) (Map.Map DataSetName Entity))
+    { unStandardLevel :: (Map.Map (ID, Int) (Seq.Seq (Maybe Entity)))
     }
 newtype UnifiedData      =
     UnifiedData { unUnifiedData :: (Map.Map ID (Map.Map DataSetName Entity)) }
