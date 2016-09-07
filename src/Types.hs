@@ -13,7 +13,6 @@ module Types where
 
 -- Standard
 import qualified Data.Map.Strict as Map
-import qualified Data.Sequence as Seq
 import GHC.Generics
 
 -- Cabal
@@ -38,7 +37,7 @@ newtype EntityDiff       = EntityDiff  { unEntityDiff  :: T.Text }
 newtype Size             = Size Int
 newtype Counter          = Counter Int deriving (Eq, Ord, Num)
 newtype WalkerRestart    = WalkerRestart { unWalkerRestart :: Double }
-newtype DataSetName      = DataSetName T.Text deriving (Show)
+newtype DataSetName      = DataSetName T.Text deriving (Eq, Ord, Show)
 newtype LevelName        = LevelName { unLevelName :: T.Text }
                            deriving (Eq, Ord, Show)
 newtype IDVec            = IDVec { unIDVec :: V.Vector ID }
@@ -47,12 +46,14 @@ newtype WalkerState      =
     WalkerState { unWalkerState :: (Int, Int, TransProbMatrix) }
 
 newtype DataSet          = DataSet (Map.Map ID Entity)
-newtype Level            = Level { unLevel :: (Map.Map ID (Seq.Seq Entity)) }
+newtype Level = Level
+    { unLevel :: (Map.Map ID (Map.Map DataSetName Entity))
+    }
 newtype StandardLevel = StandardLevel
-    { unStandardLevel :: (Map.Map (ID, Int) (Seq.Seq Entity))
+    { unStandardLevel :: (Map.Map (ID, Int) (Map.Map DataSetName Entity))
     }
 newtype UnifiedData      =
-    UnifiedData { unUnifiedData :: (Map.Map ID (Seq.Seq Entity)) }
+    UnifiedData { unUnifiedData :: (Map.Map ID (Map.Map DataSetName Entity)) }
 
 newtype SimVector =
     SimVector { unSimVector :: VS.Vector Double }
@@ -92,7 +93,7 @@ data Entity = Entity { _entityID    :: !ID
                      , _levelName   :: !LevelName
                      , _entityValue :: !Double
                      }
-              deriving (Show)
+              deriving (Eq, Ord, Show)
 
 data Environment =
     Environment { edgeMat1  :: !EdgeSimMatrix

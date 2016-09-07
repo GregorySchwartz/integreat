@@ -18,6 +18,7 @@ module Utility
     , getVertexSim
     , pairs
     , flipToo
+    , listToTuple
     , sameWithEntityDiff
     ) where
 
@@ -119,6 +120,11 @@ pairs f l = [f x y | (x:ys) <- tails l, y <- ys]
 -- | Take a tuple index with a value and return it with its flip.
 flipToo :: ((a, a), b) -> [((a, a), b)]
 flipToo all@((!x, !y), !z) = [all, ((y, x), z)]
+
+-- | Convert a list to a tuple.
+listToTuple :: (Show a) => [a] -> (a, a)
+listToTuple [!x, !y] = (x, y)
+listToTuple (x:_)    = error ("Wrong pairing for " ++ show x)
 
 -- | Check if two entities are actually the same if one contains the entityDiff
 -- while the other does not.

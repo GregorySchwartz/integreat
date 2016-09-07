@@ -19,8 +19,8 @@ module Load
     ) where
 
 -- Standard
-import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
+import qualified Data.Map.Strict as Map
 import qualified Data.Foldable as F
 
 -- Cabal
@@ -50,18 +50,18 @@ dataEntryToEntity x = Entity { _entityID    = ID $ vertex x
 entitiesToLevels :: [Entity] -> [(LevelName, Level)]
 entitiesToLevels = fmap (L.over L._2 Level)
                  . Map.toAscList
-                 . Map.unionsWith (Map.unionWith (Seq.><))
+                 . Map.unionsWith (Map.unionWith Map.union)
                  . fmap (\ !x -> Map.singleton
                                     (_levelName x)
                                     ( Map.singleton
                                         (_entityID x)
-                                        (Seq.singleton x)
+                                        (Map.singleton (_dataSetName x) x)
                                     )
                         )
 
 -- | Combine all levels together to get a unique list of IDs.
 unifyAllLevels :: [Level] -> UnifiedData
-unifyAllLevels = UnifiedData . Map.unionsWith (Seq.><) . fmap unLevel
+unifyAllLevels = UnifiedData . Map.unionsWith Map.union . fmap unLevel
 
 -- | Get a vector of all IDs for easy indexing.
 getIDVec :: UnifiedData -> IDVec

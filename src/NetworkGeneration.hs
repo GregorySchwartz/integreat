@@ -13,9 +13,11 @@ module NetworkGeneration
 
 -- Standard
 import Data.Bool
+import Data.List
 import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import qualified Data.Foldable as F
+import Data.Function (on)
 
 -- Cabal
 import qualified Data.Vector as V
@@ -48,7 +50,6 @@ getSimMat (Default def)
         . assoc (Map.size idMap, Map.size idMap) def
         . concatMap flipToo
         . pairs getCorr
-        . fmap (L.over L._2 (V.fromList . F.toList))
         . Map.toList
         $ level
   where
@@ -64,9 +65,19 @@ getSimMat (Default def)
 -- measurements (specifically for a single type of entity, for instance
 -- a single protein). If there is missing data, we just say the default
 -- value that could never exist: -5.
-correlate :: V.Vector Entity -> V.Vector Entity -> Double
-correlate e1 e2 =
+correlate :: Map.Map DataSetName Entity -> Map.Map DataSetName Entity -> Double
+correlate e1 =
     (\x -> if isNaN x then (-5) else x)
         . kendall
-        . V.zipWith (\ !x !y -> (_entityValue x, _entityValue y)) e1
-        $ e2
+        . groupDataSets (Map.map (:[]) e1)
+        . Map.map (:[])
+
+-- | Group two entity maps by their data sets and convert matches to tuples.
+groupDataSets :: Map.Map DataSetName [Entity]
+              -> Map.Map DataSetName [Entity]
+              -> V.Vector (Entity, Entity)
+groupDataSets e1 = V.fromList
+                 . fmap listToTuple
+                 . Map.elems
+                 . Map.filter (not . null . drop 1)
+                 . Map.unionWith (++) e1
