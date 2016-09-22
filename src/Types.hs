@@ -33,6 +33,7 @@ import Numeric.LinearAlgebra
 -- Algebraic
 newtype ID               = ID { unID :: T.Text } deriving (Eq, Ord, Show)
 newtype Default          = Default { unDefault :: Double }
+newtype Bandwidth        = Bandwidth { unBandwidth :: Double }
 newtype MaximumEdge      = MaximumEdge { unMaximumEdge :: Double }
 newtype EntityDiff       = EntityDiff  { unEntityDiff  :: T.Text }
 newtype Size             = Size Int
@@ -106,8 +107,12 @@ data Environment =
                 , restart   :: !WalkerRestart
                 }
 
-data WalkerChoice = Same | DifferentLeft | DifferentRight
-data Method       = CosineSimilarity | RandomWalker deriving (Eq, Read, Show)
+data WalkerChoice    = Same | DifferentLeft | DifferentRight
+data AlignmentMethod = CosineSimilarity | RandomWalker deriving (Eq, Read, Show)
+data EdgeMethod
+    = ARACNE Double
+    | KendallCorrelation
+    deriving (Eq,Read,Show)
 
 data DataEntry    = DataEntry { dataLevel     :: !T.Text
                               , dataReplicate :: !T.Text

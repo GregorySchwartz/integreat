@@ -1,4 +1,4 @@
-{- RandomWalk
+{- Alignment.RandomWalk
 Gregory W. Schwartz
 
 Collections the functions pertaining to random walk over the network.
@@ -6,7 +6,7 @@ Collections the functions pertaining to random walk over the network.
 
 {-# LANGUAGE BangPatterns #-}
 
-module RandomWalk
+module Alignment.RandomWalk
     ( getTransProbMat
     , evalWalker
     , getWalkerNodeCorrespondenceScores

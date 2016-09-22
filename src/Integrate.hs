@@ -20,12 +20,12 @@ import qualified Data.Text as T
 -- Local
 import Types
 import Utility
-import Cosine
-import RandomWalk
+import Alignment.Cosine
+import Alignment.RandomWalk
 
 -- | Get the scores of each vertex for the best conserved vertices (based on the
 -- vertex and edge similarity in each level network).
-integrate :: Method
+integrate :: AlignmentMethod
           -> VertexSimMap
           -> EdgeSimMap
           -> WalkerRestart

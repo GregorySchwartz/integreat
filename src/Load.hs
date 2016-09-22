@@ -16,6 +16,7 @@ module Load
     , defVertexSimMap
     , vertexCsvToLevels
     , standardizeLevel
+    , getPremadeNetworks
     ) where
 
 -- Standard
@@ -131,7 +132,7 @@ standardizeLevel (IDMap idMap) (Level level) =
   where
     standardDataSets = getStandardDataSets . Level $ level
     keyNotFound k    = "ID: " ++ show k ++ " not found."
-    
+
 -- | Unify the ordering of the data for data set entries.
 getStandardDataSets :: Level -> StandardDataSets
 getStandardDataSets = StandardDataSets
@@ -147,3 +148,39 @@ standardizeDataSets :: Map.Map DataSetName Entity
                     -> StandardDataSets
                     -> (Seq.Seq (Maybe Entity))
 standardizeDataSets m = fmap (flip Map.lookup m) . unStandardDataSets
+
+-- | Get a vector of all IDs from pre-made networks.
+getPremadeIDVec :: [String] -> IDVec
+getPremadeIDVec = IDVec . V.fromList . fmap (ID . T.pack)
+
+-- | Get a map of all IDs for conversion. Assumes the IDs are already ordered
+-- correctly.
+getPremadeIDMap :: [String] -> IDMap
+getPremadeIDMap xs =
+    IDMap . Map.fromList . flip zip (fmap read xs) . fmap (ID . T.pack) $ xs
+
+-- | Get the edge matrix from a list of edges. Assumes the IDs integers,
+-- starting at 0.
+getPremadeEdgeSimMatrix :: IDMap -> [(String, String, Double)] -> EdgeSimMatrix
+getPremadeEdgeSimMatrix (IDMap idMap) =
+    EdgeSimMatrix
+        . assoc (Map.size idMap, Map.size idMap) 0
+        . fmap (\(!x, !y, !z) -> ((read x, read y), z))
+
+-- | Get the pre-made level networks for use with integration. We assume that
+-- the IDs are integers, starting at 0, with everything in order.
+getPremadeNetworks :: [([String], [(String, String, Double)])]
+                   -> (IDMap, IDVec, VertexSimMap, EdgeSimMap)
+getPremadeNetworks !allNetworks = (idMap, idVec, vertexSimMap, edgeSimMap)
+  where
+    edgeSimMap   = EdgeSimMap
+                 . Map.fromList
+                 . zip levelNames
+                 . fmap (getPremadeEdgeSimMatrix idMap)
+                 . fmap snd
+                 $ allNetworks
+    vertexSimMap = defVertexSimMap idMap levelNames
+    levelNames   = fmap (LevelName . T.pack . show) [0..length allNetworks - 1]
+    idMap        = getPremadeIDMap allVertices
+    idVec        = getPremadeIDVec allVertices
+    allVertices  = concatMap fst allNetworks

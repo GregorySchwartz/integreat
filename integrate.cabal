@@ -18,9 +18,10 @@ library
   exposed-modules:     Types
                      , Utility
                      , Load
-                     , NetworkGeneration
-                     , RandomWalk
-                     , Cosine
+                     , Edge.Correlation
+                     , Edge.Aracne
+                     , Alignment.RandomWalk
+                     , Alignment.Cosine
                      , Integrate
                      , Print
   build-depends:       base >= 4.7 && < 5

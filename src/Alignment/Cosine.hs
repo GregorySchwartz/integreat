@@ -1,4 +1,4 @@
-{- Cosine
+{- Alignment.Cosine
 Gregory W. Schwartz
 
 Collections the functions pertaining to getting integration by cosine
@@ -7,7 +7,7 @@ similarity.
 
 {-# LANGUAGE BangPatterns #-}
 
-module Cosine
+module Alignment.Cosine
     ( cosineIntegrate
     ) where
 
@@ -40,21 +40,16 @@ cosineIntegrate vMap l1 l2 e1 e2 =
         . unEdgeSimMatrix
         $ e1
   where
-    applyCosine x =
-        (\ (!xs, !ys) -> cosineSim xs ys
-                       * (VS.length xs /. (rows . unEdgeSimMatrix $ e1))
-        )
-            . removeMatchFilter (== -5) (newE1 ! x)
-            $ (newE2 ! x)
-    newE1     = unEdgeSimMatrix . cosineUpdateSimMat e1 $ changes
-    newE2     = unEdgeSimMatrix . cosineUpdateSimMat e2 $ changes
-    changes   = V.toList
-              . V.imap (\i v -> ((i, i), v))
-              . VS.convert
-              . takeDiag
-              . unVertexSimMatrix
-              $ vertexSim
-    vertexSim = getVertexSim l1 l2 vMap
+    applyCosine x = cosineSim (newE1 ! x) (newE2 ! x)
+    newE1         = unEdgeSimMatrix . cosineUpdateSimMat e1 $ changes
+    newE2         = unEdgeSimMatrix . cosineUpdateSimMat e2 $ changes
+    changes       = V.toList
+                  . V.imap (\i v -> ((i, i), v))
+                  . VS.convert
+                  . takeDiag
+                  . unVertexSimMatrix
+                  $ vertexSim
+    vertexSim     = getVertexSim l1 l2 vMap
 
 -- | Update the similarity matrices where the diagonal contains the similarity
 -- between vertices of different levels.
