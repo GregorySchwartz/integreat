@@ -10,6 +10,7 @@ entities.
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Main where
 
@@ -58,15 +59,16 @@ data Options = Options { dataInput       :: Maybe String
                                         <?> "([10000] | STEPS) For the random walker algorithm, the number of steps to take  before stopping."
                        , premade         :: Bool
                                         <?> "Whether the input data (dataInput) is a pre-made network of the format \"[([\"VERTEX\"], [(\"SOURCE\", \"DESTINATION\", WEIGHT)])]\", where VERTEX, SOURCE, and DESTINATION are of type INT starting at 0, in order, and WEIGHT is a DOUBLE representing the weight of the edge between SOURCE and DESTINATION."
-                       , test            :: Maybe String
-                                        <?> "The filename of the permuted vertices for accuracy testing purposes. If supplied, the output is changed to an accuracy measure. In this case, we get the total rank below the number of permuted vertices divided by the theoretical maximum (so if there were five changed vertices out off 10 and two were rank 8 and 10 while the others were in the top five, we would have (1 - ((3 + 5) / (10 + 9 + 8 + 7 + 6))) as the accuracy."
+                       , test            :: Bool
+                                        <?> "Whether the input data from premade is from a test run. If supplied, the output is changed to an accuracy measure. In this case, we get the total rank below the number of permuted vertices divided by the theoretical maximum (so if there were five changed vertices out off 10 and two were rank 8 and 10 while the others were in the top five, we would have (1 - ((3 + 5) / (10 + 9 + 8 + 7 + 6))) as the accuracy."
                        }
                deriving (Generic)
 
 instance ParseRecord Options
 
 -- | Get all of the required information for integration.
-getIntegrationInput :: Options -> IO (IDMap, IDVec, VertexSimMap, EdgeSimMap)
+getIntegrationInput :: Options
+                    -> IO (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap)
 getIntegrationInput opts = do
     let processCsv = snd . either error id
 
@@ -112,10 +114,11 @@ getIntegrationInput opts = do
                                         (MaximumEdge 1)
                                         idMap
 
-    return (idMap, idVec, vertexSimMap, edgeSimMap)
+    return (Nothing, idMap, idVec, vertexSimMap, edgeSimMap)
 
 -- | Get all of the network info that is pre-made for input into the integration method.
-getPremadeIntegrationInput :: Options -> IO (IDMap, IDVec, VertexSimMap, EdgeSimMap)
+getPremadeIntegrationInput :: Options
+                           -> IO (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap)
 getPremadeIntegrationInput opts = do
 
     contents <- maybe getContents readFile
@@ -123,18 +126,20 @@ getPremadeIntegrationInput opts = do
               . dataInput
               $ opts
 
-    return . getPremadeNetworks $ (read contents :: [([String], [(String, String, Double)])])
+    if unHelpful . test $ opts
+        then return
+           . getPremadeNetworks
+           . L.over L._1 Just 
+           $ (read contents :: ([String], [([String], [(String, String, Double)])]))
+        else return
+           . getPremadeNetworks
+           . (Nothing,)
+           $ (read contents :: [([String], [(String, String, Double)])])
 
 -- | Show the accuracy of a test analysis.
-showAccuracy :: String -> IDVec -> NodeCorrScores -> IO T.Text
-showAccuracy file idVec nodeCorrScores = do
-    truthContents <- readFile file
-
-    let truthSet = Set.fromList
-                 . fmap (ID . T.pack)
-                 $ (\x -> read x :: [String]) truthContents
-
-    return . T.pack . show . getAccuracy truthSet idVec $ nodeCorrScores
+showAccuracy :: Set.Set ID -> IDVec -> NodeCorrScores -> T.Text
+showAccuracy truthSet idVec nodeCorrScores =
+    T.pack . show . getAccuracy truthSet idVec $ nodeCorrScores
 
 main :: IO ()
 main = do
@@ -142,12 +147,11 @@ main = do
                       \ Integrate data from multiple sources to find consistent\
                       \ (or inconsistent) entities."
 
-    (idMap, idVec, vertexSimMap, edgeSimMap) <- bool
-                                                    (getIntegrationInput opts)
-                                                    (getPremadeIntegrationInput opts)
-                                              . unHelpful
-                                              . premade
-                                              $ opts
+    (truthSet, idMap, idVec, vertexSimMap, edgeSimMap) <-
+        bool (getIntegrationInput opts) (getPremadeIntegrationInput opts)
+            . unHelpful
+            . premade
+            $ opts
 
     nodeCorrScores <- integrate
                         ( maybe CosineSimilarity read
@@ -165,8 +169,12 @@ main = do
                         )
                         (Counter . fromMaybe 10000 . unHelpful . steps $ opts)
 
-    case unHelpful . test $ opts of
-        Nothing  -> T.putStr . printNodeCorrScores idVec $ nodeCorrScores
-        (Just x) -> T.putStr =<< (showAccuracy x idVec $ nodeCorrScores)
+    if unHelpful . test $ opts
+        then T.putStr
+           . maybe
+                (error "Truth set not found.")
+                (\x -> showAccuracy x idVec nodeCorrScores)
+           $ truthSet
+        else T.putStr . printNodeCorrScores idVec $ nodeCorrScores
 
     return ()

@@ -169,10 +169,14 @@ getPremadeEdgeSimMatrix (IDMap idMap) =
 
 -- | Get the pre-made level networks for use with integration. We assume that
 -- the IDs are integers, starting at 0, with everything in order.
-getPremadeNetworks :: [([String], [(String, String, Double)])]
-                   -> (IDMap, IDVec, VertexSimMap, EdgeSimMap)
-getPremadeNetworks !allNetworks = (idMap, idVec, vertexSimMap, edgeSimMap)
+getPremadeNetworks
+    :: (Maybe [String], [([String], [(String, String, Double)])])
+    -> (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap)
+getPremadeNetworks (!changedVerticesString, !allNetworks) =
+    (changedVertices, idMap, idVec, vertexSimMap, edgeSimMap)
   where
+    changedVertices =
+        fmap (Set.fromList . fmap (ID . T.pack)) $ changedVerticesString
     edgeSimMap   = EdgeSimMap
                  . Map.fromList
                  . zip levelNames
