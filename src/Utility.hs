@@ -7,11 +7,13 @@ Collections all miscellaneous functions.
 {-# LANGUAGE BangPatterns #-}
 
 module Utility
-    ( lookupWithError
+    ( minMaxNorm
+    , lookupWithError
     , getNeighbors
     , largestLeftEig
     , (/.)
     , cosineSim
+    , cosineSimIMap
     , removeMatchFilter
     , applyRows
     , avgVec
@@ -30,17 +32,23 @@ import Data.Maybe
 import Data.List
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
+import qualified Data.IntMap.Strict as IMap
 import Data.Function (on)
 
 -- Cabal
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Text as T
-import Numeric.LinearAlgebra
+import Data.Graph.Inductive
 import Control.Lens
+import Numeric.LinearAlgebra
 
 -- Local
 import Types
+
+-- | Min max normalize.
+minMaxNorm :: [Double] -> [Double]
+minMaxNorm xs = fmap (\x -> (x - minimum xs) / (maximum xs - minimum xs)) xs
 
 -- | Map lookup with a custom error if the value is not found.
 lookupWithError :: (Ord a) => String -> a -> Map.Map a b -> b
@@ -72,6 +80,14 @@ largestLeftEig (!eigVal, !eigVec) =
 -- | Cosine similarity.
 cosineSim :: Vector Double -> Vector Double -> Double
 cosineSim x y = dot x y / (norm_2 x * norm_2 y)
+
+-- | Cosine similarity of two IntMaps.
+cosineSimIMap :: IMap.IntMap Int -> IMap.IntMap Int -> Double
+cosineSimIMap x y = fromIntegral (imapSum $ IMap.intersectionWith (*) x y)
+                  / (imapNorm x * imapNorm y)
+  where
+    imapNorm = sqrt . fromIntegral . imapSum . IMap.map (^ 2)
+    imapSum  = IMap.foldl' (+) 0
 
 -- | Remove indices matching a boolean function from both vectors but make
 -- sure that the indices match. NOT NEEDED WITH COSINE.
@@ -161,7 +177,7 @@ rankNodeCorrScores (IDVec idVec) = zip [1..]
                                  . V.imap (\ !i !v -> (idVec V.! i, v))
                                  . VS.convert
                                  . unNodeCorrScores
-    
+
 -- | Get the accuracy of a run. In this case, we get the total rank below the
 -- number of permuted vertices divided by the theoretical maximum (so if there were
 -- five changed vertices out off 10 and two were rank 8 and 10 while the others

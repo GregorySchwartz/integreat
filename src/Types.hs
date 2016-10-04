@@ -8,12 +8,14 @@ Collections the types used in the program
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module Types where
 
 -- Standard
 import qualified Data.Sequence as Seq
 import qualified Data.Map.Strict as Map
+import qualified Data.IntMap.Strict as IMap
 import GHC.Generics
 
 -- Cabal
@@ -21,9 +23,9 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Text as T
 import Data.Csv
+import Data.Graph.Inductive
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Random
 import Control.Lens
 import Numeric.LinearAlgebra
 
@@ -45,7 +47,9 @@ newtype LevelName        = LevelName { unLevelName :: T.Text }
 newtype IDVec            = IDVec { unIDVec :: V.Vector ID }
 newtype IDMap            = IDMap { unIDMap :: Map.Map ID Int }
 newtype WalkerState      =
-    WalkerState { unWalkerState :: (Int, Int, TransProbMatrix) }
+    WalkerState { unWalkerState :: (Int, IMap.IntMap Int) }
+newtype WalkerStateCSRW  =
+    WalkerStateCSRW { unWalkerStateCSRW :: (Int, Int, TransProbMatrix) }
 
 newtype DataSet          = DataSet (Map.Map ID Entity)
 newtype StandardDataSets = StandardDataSets
@@ -70,11 +74,15 @@ newtype VertexSimMatrix =
     deriving (Show)
 newtype TransProbMatrix  =
     TransProbMatrix { unTransProbMatrix :: Matrix Double }
+newtype LevelGr = LevelGr { unLevelGr :: Gr Int Double } deriving (Show)
 newtype NodeCorrScores   =
     NodeCorrScores { unNodeCorrScores :: VS.Vector Double }
 
 newtype EdgeSimMap       =
     EdgeSimMap { unEdgeSimMap :: (Map.Map LevelName EdgeSimMatrix) }
+    deriving (Show)
+newtype GrMap            =
+    GrMap { unGrMap :: (Map.Map LevelName LevelGr) }
     deriving (Show)
 newtype VertexSimMap     =
     VertexSimMap { unVertexSimMap
@@ -88,9 +96,17 @@ newtype Walker a =
              , Applicative
              , Monad
              , MonadIO
-             , MonadRandom
              , MonadReader Environment
              , MonadState WalkerState
+             )
+newtype WalkerCSRW a =
+    WalkerCSRW { unWalkerCSRW :: (ReaderT EnvironmentCSRW (StateT WalkerStateCSRW IO) a) }
+    deriving ( Functor
+             , Applicative
+             , Monad
+             , MonadIO
+             , MonadReader EnvironmentCSRW
+             , MonadState WalkerStateCSRW
              )
 
 data Entity = Entity { _entityID    :: !ID
@@ -101,14 +117,23 @@ data Entity = Entity { _entityID    :: !ID
               deriving (Eq, Ord, Show)
 
 data Environment =
-    Environment { edgeMat1  :: !EdgeSimMatrix
-                , edgeMat2  :: !EdgeSimMatrix
-                , vertexMat :: !VertexSimMatrix
-                , restart   :: !WalkerRestart
+    Environment { eGr     :: !LevelGr
+                , restart :: !WalkerRestart
+                , v0      :: !Int
                 }
+data EnvironmentCSRW =
+    EnvironmentCSRW { edgeMat1  :: !EdgeSimMatrix
+                    , edgeMat2  :: !EdgeSimMatrix
+                    , vertexMat :: !VertexSimMatrix
+                    , restart   :: !WalkerRestart
+                    }
 
 data WalkerChoice    = Same | DifferentLeft | DifferentRight
-data AlignmentMethod = CosineSimilarity | RandomWalker deriving (Eq, Read, Show)
+data AlignmentMethod
+    = CosineSimilarity
+    | RandomWalker
+    | CSRW
+    deriving (Eq,Read,Show)
 data EdgeMethod
     = ARACNE Double
     | KendallCorrelation

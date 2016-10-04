@@ -29,6 +29,7 @@ import qualified Data.Foldable as F
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Text as T
+import Data.Graph.Inductive
 import qualified Control.Lens as L
 import Numeric.LinearAlgebra
 
@@ -158,6 +159,15 @@ getPremadeIDVec = IDVec . V.fromList . fmap (ID . T.pack)
 getPremadeIDMap :: [String] -> IDMap
 getPremadeIDMap xs =
     IDMap . Map.fromList . flip zip (fmap read xs) . fmap (ID . T.pack) $ xs
+    
+-- | Get the graph from a list of edges. Assumes the IDs integers,
+-- starting at 0.
+getPremadeGr :: IDMap -> [(String, String, Double)] -> LevelGr
+getPremadeGr (IDMap idMap) =
+    LevelGr
+        . undir
+        . mkGraph (zip [0..Map.size idMap] [0..Map.size idMap])
+        . fmap (\(!x, !y, !z) -> (read x, read y, z))
 
 -- | Get the edge matrix from a list of edges. Assumes the IDs integers,
 -- starting at 0.
@@ -171,12 +181,18 @@ getPremadeEdgeSimMatrix (IDMap idMap) =
 -- the IDs are integers, starting at 0, with everything in order.
 getPremadeNetworks
     :: (Maybe [String], [([String], [(String, String, Double)])])
-    -> (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap)
+    -> (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
 getPremadeNetworks (!changedVerticesString, !allNetworks) =
-    (changedVertices, idMap, idVec, vertexSimMap, edgeSimMap)
+    (changedVertices, idMap, idVec, vertexSimMap, edgeSimMap, grMap)
   where
     changedVertices =
         fmap (Set.fromList . fmap (ID . T.pack)) $ changedVerticesString
+    grMap        = GrMap
+                 . Map.fromList
+                 . zip levelNames
+                 . fmap (getPremadeGr idMap)
+                 . fmap snd
+                 $ allNetworks
     edgeSimMap   = EdgeSimMap
                  . Map.fromList
                  . zip levelNames

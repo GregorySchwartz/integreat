@@ -8,7 +8,8 @@ matrix using different kinds of correlations as weights.
 {-# LANGUAGE BangPatterns #-}
 
 module Edge.Correlation
-    ( getSimMatKendall
+    ( getGrKendall
+    , getSimMatKendall
     ) where
 
 -- Standard
@@ -21,6 +22,7 @@ import qualified Data.Foldable as F
 
 -- Cabal
 import qualified Data.Vector as V
+import Data.Graph.Inductive
 import qualified Control.Lens as L
 import Numeric.LinearAlgebra
 import Statistics.Correlation.Kendall
@@ -28,6 +30,39 @@ import Statistics.Correlation.Kendall
 -- Local
 import Types
 import Utility
+
+-- | Take one level and get the graph by using correlations (a
+-- co-expression network). The default value is applied to missing data.
+-- Consider using a value that would mean no correlation: 0.
+-- Also, possibly correct for added
+-- positions in the entity. Use the maximum value if the two entities are the
+-- same without the entityDiff.
+getGrKendall :: Maybe EntityDiff
+             -> MaximumEdge
+             -> IDMap
+             -> StandardLevel
+             -> LevelGr
+getGrKendall
+    entityDiff
+    (MaximumEdge maxEdge)
+    (IDMap idMap)
+    (StandardLevel level) =
+    LevelGr
+        . undir
+        . mkGraph (zip [0..Map.size idMap] [0..Map.size idMap])
+        . fmap (\((!x, !y), !z) -> (x, y, z))
+        . pairs getCorr
+        . fmap (L.over L._2 (V.fromList . F.toList))
+        . Map.toList
+        $ level
+  where
+      getCorr ((!id1, !idx1), !x) ((!id2, !idx2), !y) =
+          ( (idx1 , idx2)
+          , bool (kendallCorrelate x y) maxEdge
+          . sameWithEntityDiff entityDiff id1
+          $ id2
+          )
+      keyNotFound k = "ID: " ++ show k ++ " not found."
 
 -- | Take one level and get the similarity matrix by using correlations (a
 -- co-expression network). The default value is applied to missing data.

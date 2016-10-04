@@ -7,31 +7,33 @@ Collections the functions pertaining to the integration of levels of data.
 {-# LANGUAGE BangPatterns #-}
 
 module Integrate
-    ( integrate
+    ( integrateCosineSim
+    , integrateWalker
+    , integrateCSRW
     ) where
 
 -- Standard
+import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 
 -- Cabal
 import qualified Data.Vector as V
+import qualified Data.Vector.Storable as VS
 import qualified Data.Text as T
+import Data.Graph.Inductive
 
 -- Local
 import Types
 import Utility
 import Alignment.Cosine
 import Alignment.RandomWalk
+import Alignment.CSRW
 
--- | Get the scores of each vertex for the best conserved vertices (based on the
--- vertex and edge similarity in each level network).
-integrate :: AlignmentMethod
-          -> VertexSimMap
-          -> EdgeSimMap
-          -> WalkerRestart
-          -> Counter
-          -> IO NodeCorrScores
-integrate CosineSimilarity vertexSimMap (EdgeSimMap edgeSimMap) _ _ =
+-- | Do integration using cosine similarity.
+integrateCosineSim :: VertexSimMap
+                   -> EdgeSimMap
+                   -> IO NodeCorrScores
+integrateCosineSim vertexSimMap (EdgeSimMap edgeSimMap) =
     return
         . NodeCorrScores
         . V.convert
@@ -49,7 +51,37 @@ integrate CosineSimilarity vertexSimMap (EdgeSimMap edgeSimMap) _ _ =
                         )
                         l
                         edgeSimMap
-integrate RandomWalker vertexSimMap edgeSimMap restart counterStop = do
+
+-- | Do integration using a random walker.
+integrateWalker :: WalkerRestart -> Counter -> GrMap -> IO NodeCorrScores
+integrateWalker walkerRestart counterStop (GrMap grMap) = do
+    fmap ( NodeCorrScores
+         . V.convert
+         . applyRows avgVec
+         . fmap VS.fromList
+         )
+        . sequence
+        $ eval <$> Map.elems grMap <*> Map.elems grMap
+  where
+    eval gr1 gr2 = sequence
+                 . fmap (randomWalkerScore walkerRestart counterStop gr1 gr2)
+                 . allNodes (unLevelGr gr1)
+                 . unLevelGr
+                 $ gr2
+    allNodes gr1 gr2 = Set.toList
+                     . Set.union (Set.fromList . nodes $ gr2)
+                     . Set.fromList
+                     . nodes
+                     $ gr1
+
+-- | Use integration using a random walker "CSRW".
+integrateCSRW
+    :: VertexSimMap
+    -> EdgeSimMap
+    -> WalkerRestart
+    -> Counter
+    -> IO NodeCorrScores
+integrateCSRW vertexSimMap edgeSimMap restart counterStop = do
       fmap ( NodeCorrScores
            . V.convert
            . applyRows avgVec

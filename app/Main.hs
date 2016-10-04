@@ -38,7 +38,7 @@ import Utility
 import Load
 import Edge.Correlation
 import Edge.Aracne
-import Alignment.RandomWalk
+import Alignment.CSRW
 import Integrate
 import Print
 
@@ -50,13 +50,13 @@ data Options = Options { dataInput       :: Maybe String
                        , entityDiff      :: Maybe T.Text
                                         <?> "When comparing entities that are the same, ignore the text after this separator. Used for comparing phosphorylated positions with another level. For example, if we have a strings ARG29 and ARG29_7 that we want to compare, we want to say that their value is the highest in correlation, so this string would be \"_\""
                        , alignmentMethod :: Maybe String
-                                        <?> "([CosineSimilarity] | RandomWalker) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
+                                        <?> "([CosineSimilarity] | RandomWalker | CSRW) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
                        , edgeMethod      :: Maybe String
                                         <?> "([ARACNE BANDWIDTH] | KendallCorrelation) The method to use for the edges between entities in the coexpression matrix. The default bandwith for ARACNE is 0.1."
                        , walkerRestart   :: Maybe Double
-                                        <?> "([0.05] | PROBABILITY) For the random walker algorithm, the probability of making  a jump to a random vertex. Recommended to be the ratio of  the total number of vertices in the top 99% smallest  subnetworks to the total number of nodes in the reduced  product graph (Jeong, 2015)."
+                                        <?> "([0.25] | PROBABILITY) For the random walker algorithm, the probability of making  a jump to a random vertex. Recommended to be the ratio of  the total number of vertices in the top 99% smallest  subnetworks to the total number of nodes in the reduced  product graph (Jeong, 2015)."
                        , steps           :: Maybe Int
-                                        <?> "([10000] | STEPS) For the random walker algorithm, the number of steps to take  before stopping."
+                                        <?> "([100] | STEPS) For the random walker algorithm, the number of steps to take  before stopping."
                        , premade         :: Bool
                                         <?> "Whether the input data (dataInput) is a pre-made network of the format \"[([\"VERTEX\"], [(\"SOURCE\", \"DESTINATION\", WEIGHT)])]\", where VERTEX, SOURCE, and DESTINATION are of type INT starting at 0, in order, and WEIGHT is a DOUBLE representing the weight of the edge between SOURCE and DESTINATION."
                        , test            :: Bool
@@ -67,8 +67,9 @@ data Options = Options { dataInput       :: Maybe String
 instance ParseRecord Options
 
 -- | Get all of the required information for integration.
-getIntegrationInput :: Options
-                    -> IO (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap)
+getIntegrationInput
+    :: Options
+    -> IO (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
 getIntegrationInput opts = do
     let processCsv = snd . either error id
 
@@ -113,12 +114,21 @@ getIntegrationInput opts = do
                                         eDiff
                                         (MaximumEdge 1)
                                         idMap
+        grMap = GrMap
+              . Map.fromList
+              . fmap ( L.over L._2 ( getGrMap edgeSimMethod
+                                   . standardizeLevel idMap
+                                   )
+                     )
+              $ levels
+        getGrMap KendallCorrelation = getGrKendall eDiff (MaximumEdge 1) idMap
 
-    return (Nothing, idMap, idVec, vertexSimMap, edgeSimMap)
+    return (Nothing, idMap, idVec, vertexSimMap, edgeSimMap, grMap)
 
 -- | Get all of the network info that is pre-made for input into the integration method.
-getPremadeIntegrationInput :: Options
-                           -> IO (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap)
+getPremadeIntegrationInput
+    :: Options
+    -> IO (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
 getPremadeIntegrationInput opts = do
 
     contents <- maybe getContents readFile
@@ -147,27 +157,36 @@ main = do
                       \ Integrate data from multiple sources to find consistent\
                       \ (or inconsistent) entities."
 
-    (truthSet, idMap, idVec, vertexSimMap, edgeSimMap) <-
+    (truthSet, idMap, idVec, vertexSimMap, edgeSimMap, grMap) <-
         bool (getIntegrationInput opts) (getPremadeIntegrationInput opts)
             . unHelpful
             . premade
             $ opts
 
-    nodeCorrScores <- integrate
-                        ( maybe CosineSimilarity read
-                        . unHelpful
-                        . alignmentMethod
-                        $ opts
-                        )
-                        vertexSimMap
-                        edgeSimMap
-                        ( WalkerRestart
-                        . fromMaybe 0.05
-                        . unHelpful
-                        . walkerRestart
-                        $ opts
-                        )
-                        (Counter . fromMaybe 10000 . unHelpful . steps $ opts)
+    nodeCorrScores <-
+        case maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts of
+            CosineSimilarity -> integrateCosineSim
+                vertexSimMap
+                edgeSimMap
+            RandomWalker -> integrateWalker
+                ( WalkerRestart
+                . fromMaybe 0.25
+                . unHelpful
+                . walkerRestart
+                $ opts
+                )
+                (Counter . fromMaybe 100 . unHelpful . steps $ opts)
+                grMap
+            CSRW -> integrateCSRW
+                vertexSimMap
+                edgeSimMap
+                ( WalkerRestart
+                . fromMaybe 0.05
+                . unHelpful
+                . walkerRestart
+                $ opts
+                )
+                (Counter . fromMaybe 100 . unHelpful . steps $ opts)
 
     if unHelpful . test $ opts
         then T.putStr

@@ -5,205 +5,126 @@ Collections the functions pertaining to random walk over the network.
 -}
 
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module Alignment.RandomWalk
-    ( getTransProbMat
-    , evalWalker
-    , getWalkerNodeCorrespondenceScores
+    ( randomWalkerScore
     ) where
 
 -- Standard
+import Data.Maybe
 import qualified Data.Set as Set
+import Data.List
 import Data.Tuple
+import qualified Data.IntMap.Strict as IMap
 
 -- Cabal
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Text as T
+import Data.Graph.Inductive
+import Data.Random
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Random
 import Control.Lens
-import Numeric.LinearAlgebra
 
 -- Local
 import Types
 import Utility
 
--- | Get the transition probability.
-getTransProb :: WalkerChoice -> Set.Set Int -> Walker Double
-getTransProb Same neighbors = do
-    c1   <- fmap (view _1 . unWalkerState) get
-    vMat <- fmap (unVertexSimMatrix . vertexMat) ask
-
-    return $ vMat ! c1 ! c1 /. (fromIntegral $ Set.size neighbors)
-getTransProb choice neighbors = do
-    m1 <- fmap (unEdgeSimMatrix . edgeMat1) ask
-    m2 <- fmap (unEdgeSimMatrix . edgeMat2) ask
-
-    case choice of
-        DifferentLeft  ->
-            return
-                $ (rows m1 /. (rows m1 + rows m2)) * (1 /. Set.size neighbors)
-        DifferentRight ->
-            return
-                $ (rows m2 /. (rows m1 + rows m2)) * (1 /. Set.size neighbors)
-
--- | Update the transition probability in the matrix.
-updateTransProbMat :: [((Int, Int), Double)] -> Walker ()
-updateTransProbMat updates = do
-    let allUpdates = updates ++ fmap (over _1 swap) updates
+-- | Update the current position of the walker and the distribution.
+updateWalker :: Int -> Walker ()
+updateWalker v = do
     oldState <- get
+
+    let addOne Nothing  = Just 0
+        addOne (Just x) = Just $ x + 1
+
     put
         . WalkerState
-        . over _3 ( TransProbMatrix
-                  . (\x -> accum x const allUpdates)
-                  . unTransProbMatrix
-                  )
+        . over _2 (IMap.alter addOne v)
+        . set _1 v
         . unWalkerState
         $ oldState
 
--- | Update the current position of the walker.
-updateCs :: Int -> Int -> Walker ()
-updateCs c1 c2 = do
-    oldState <- get
-    put
-        . WalkerState
-        . set _2 c2
-        . set _1 c1
-        . unWalkerState
-        $ oldState
+-- | Transform edge weights to probability thresholds, setting the last element
+-- to 0.
+weightsToProbs :: Adj Double -> Adj Double
+weightsToProbs xs = flip zip vertices
+                  . setLastZero
+                  . drop 1
+                  . scanl' (\acc x -> acc - x) 1
+                  . fmap (/ sum normalizedWeights)
+                  $ normalizedWeights
+  where
+    setLastZero = reverse . (0 :) . drop 1 . reverse
+    normalizedWeights = minMaxNorm . fmap fst $ xs
+    vertices    = fmap snd xs
 
--- | Choose which network to traverse and update the matrix.
-diffUpdateTransProbMat :: Set.Set Int
-                       -> Set.Set Int
-                       -> Walker ()
-diffUpdateTransProbMat n1 n2 = do
-    c1 <- fmap (view _1 . unWalkerState) get
-    c2 <- fmap (view _2 . unWalkerState) get
+-- | Get a random neighbor based on their edge weights.
+randomNeighbor :: Adj Double -> IO (Maybe Int)
+randomNeighbor [] = return Nothing
+randomNeighbor ns = do
+    stepQuery <- sample (Uniform 0 1 :: Uniform Double)
+    return
+        . Just
+        . snd
+        . head
+        . dropWhile ((>= stepQuery) . fst)
+        . weightsToProbs
+        $ ns
 
-    m1 <- fmap edgeMat1 ask
-    m2 <- fmap edgeMat2 ask
+-- | Get the distribution of where the walker visits.
+getWalkDist :: Counter -> Counter -> Walker ()
+getWalkDist counterStop counter = do
+    gr <- fmap (unLevelGr . eGr) ask
+    v  <- fmap (view _1 . unWalkerState) get
 
-    whichNetwork <- liftIO . evalRandIO . getRandomR $ (0, 1)
+    restartThreshold <-
+        fmap (unWalkerRestart . (restart :: (Environment -> WalkerRestart))) ask
+    restartQuery     <- liftIO $ sample (Uniform 0 1 :: Uniform Double)
 
-    if whichNetwork == (0 :: Int)
-        then do
-            x  <- uniform . Set.toList $ n1
-            ps <- sequence
-                . fmap (getTransProb DifferentLeft . flip getNeighbors m1)
-                . Set.toList
-                $ n1
-            updateTransProbMat . zip (repeat (x, c2)) $ ps
-            updateCs x c2
-        else do
-            y  <- uniform . Set.toList $ n2
-            ps <- sequence
-                . fmap (getTransProb DifferentRight . flip getNeighbors m2)
-                . Set.toList
-                $ n2
-            updateTransProbMat . zip (repeat (c1, y)) $ ps
-            updateCs c1 y
+    v' <- if restartQuery <= restartThreshold
+            then do
+                fmap v0 ask
+            else do
+                liftIO . fmap (fromMaybe v) . randomNeighbor . lneighbors gr $ v
 
--- | Reset the walker state by choosing a random ID.
-randomJump :: Walker ()
-randomJump = do
-    size <- fmap (rows . unEdgeSimMatrix . edgeMat1) ask
-
-    newC <- liftIO . evalRandIO . getRandomR $ (0, size - 1)
-    oldState <- get
-    put . WalkerState . set _2 newC . set _1 newC . unWalkerState $ oldState
-
--- | Get the transition probability matrix from a pair of similarity
--- matrices.
-getTransProbMat :: Counter -> Counter -> Walker ()
-getTransProbMat counterStop counter = do
-    m1 <- fmap edgeMat1 ask
-    m2 <- fmap edgeMat2 ask
-
-    c1 <- fmap (view _1 . unWalkerState) get
-    c2 <- fmap (view _2 . unWalkerState) get
-
-    let n1      = getNeighbors c1 m1
-        n2      = getNeighbors c2 m2
-        overlap = Set.union n1 n2
-
-    if c1 == c2
-        then do
-            newC <- uniform . Set.toList $ overlap
-            ps   <- sequence
-                  . fmap (const (getTransProb Same overlap))
-                  . Set.toList
-                  $ overlap
-            updateTransProbMat
-                . zip (zip (Set.toList overlap) (Set.toList overlap))
-                $ ps
-            updateCs newC newC
-        else do
-            diffUpdateTransProbMat n1 n2
-
-    jump    <- liftIO . evalRandIO . getRandomR $ (0, 1)
-    restart <- fmap (unWalkerRestart . restart) ask
-
-    if jump <= restart
-        then randomJump
-        else return ()
+    updateWalker v'
 
     unless (counter > counterStop)
-        . getTransProbMat counterStop
+        . getWalkDist counterStop
         $ (counter + Counter 1)
 
--- | Get the node correspondence scores from a transition probability
--- matrix. simVec is normalized to sum to 1.
-getWalkerNodeCorrespondenceScores :: WalkerRestart
-                                  -> SimVector
-                                  -> TransProbMatrix
-                                  -> NodeCorrScores
-getWalkerNodeCorrespondenceScores (WalkerRestart restart) (SimVector simVec) =
-    NodeCorrScores
-        . (+ (scalar restart * (VS.map (/ VS.sum simVec) simVec)))
-        . (* scalar (1 - restart))
-        . largestLeftEig
-        . eig
-        . unTransProbMatrix
-
--- | Run the random walker.
-evalWalker :: VertexSimMap
-           -> EdgeSimMap
-           -> WalkerRestart
+-- | Run the random walker on a vertex.
+evalWalker :: WalkerRestart
            -> Counter
-           -> LevelName
-           -> LevelName
-           -> IO NodeCorrScores
-evalWalker vMap (EdgeSimMap eMap) restart counterStop l1 l2 = do
-    let randomC e = getRandomR (0, size - 1)
-
-    c1 <- liftIO . evalRandIO . randomC $ edgeMat1
-    c2 <- liftIO . evalRandIO . randomC $ edgeMat2
-
-    transProbMat <- fmap (view _3 . unWalkerState)
-                  . flip execStateT (st c1 c2)
+           -> LevelGr
+           -> Int
+           -> IO (IMap.IntMap Int)
+evalWalker walkerRestart counterStop gr v = do
+    distribution <- fmap (view _2 . unWalkerState)
+                  . flip execStateT (st v)
                   . runReaderT
-                        (unWalker $ getTransProbMat counterStop (Counter 0))
+                        (unWalker $ getWalkDist counterStop (Counter 0))
                   $ env
-
-    let scores = getWalkerNodeCorrespondenceScores
-                    restart
-                    (SimVector . takeDiag . unVertexSimMatrix $ vertexSim)
-                    transProbMat
-
-    return scores
+    return distribution
   where
-    st !c1 !c2 = WalkerState (c1, c2, TransProbMatrix . (size><size) . repeat $ 0)
-    size       = rows . unEdgeSimMatrix . edgeMat1 $ env
-    env = Environment { edgeMat1 = lookupLevel l1 eMap
-                      , edgeMat2 = lookupLevel l2 eMap
-                      , vertexMat = vertexSim
-                      , restart = restart
-                      }
-    vertexSim     = getVertexSim l1 l2 vMap
-    lookupLevel l = lookupWithError
-                        (levelErr l)
-                        l
-    levelErr l    = ("Level: " ++ (T.unpack $ unLevelName l) ++ " not found.")
+    st v = WalkerState (v, IMap.empty)
+    env  = Environment { eGr     = gr
+                       , restart = walkerRestart
+                       , v0      = v
+                       }
 
+-- | Get the node correspondence score of a vertex between two levels.
+randomWalkerScore :: WalkerRestart
+                  -> Counter
+                  -> LevelGr
+                  -> LevelGr
+                  -> Int
+                  -> IO Double
+randomWalkerScore walkerRestart counterStop gr1 gr2 v = do
+    gr1Dist <- evalWalker walkerRestart counterStop gr1 v
+    gr2Dist <- evalWalker walkerRestart counterStop gr2 v
+
+    return . cosineSimIMap gr1Dist $ gr2Dist
