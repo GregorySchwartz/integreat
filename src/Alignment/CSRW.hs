@@ -170,6 +170,7 @@ getWalkerNodeCorrespondenceScores :: WalkerRestart
                                   -> NodeCorrScores
 getWalkerNodeCorrespondenceScores (WalkerRestart restart) (SimVector simVec) =
     NodeCorrScores
+        . VS.convert
         . (+ (scalar restart * (VS.map (/ VS.sum simVec) simVec)))
         . (* scalar (1 - restart))
         . largestLeftEig

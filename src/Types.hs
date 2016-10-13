@@ -76,7 +76,14 @@ newtype TransProbMatrix  =
     TransProbMatrix { unTransProbMatrix :: Matrix Double }
 newtype LevelGr = LevelGr { unLevelGr :: Gr Int Double } deriving (Show)
 newtype NodeCorrScores   =
-    NodeCorrScores { unNodeCorrScores :: VS.Vector Double }
+    NodeCorrScores { unNodeCorrScores :: V.Vector Double }
+newtype FlatNodeCorrScores =
+    FlatNodeCorrScores { unFlatNodeCorrScores :: V.Vector Double }
+newtype PValNodeCorrScores =
+    PValNodeCorrScores { unPValNodeCorrScores :: V.Vector Double }
+newtype NodeCorrScoresMap = NodeCorrScoresMap
+    { unNodeCorrScoresMap :: Map.Map (LevelName, LevelName) NodeCorrScores
+    }
 
 newtype EdgeSimMap       =
     EdgeSimMap { unEdgeSimMap :: (Map.Map LevelName EdgeSimMatrix) }
@@ -163,6 +170,13 @@ instance ToNamedRecord VertexEntry
 instance DefaultOrdered VertexEntry
 
 makeLenses ''Entity
+           
+data NodeCorrScoresInfo = NodeCorrScoresInfo
+    { nodeCorrScoresMap          :: NodeCorrScoresMap
+    , avgNodeCorrScores          :: FlatNodeCorrScores
+    , rankProdNodeCorrScores     :: FlatNodeCorrScores
+    , rankProdPValNodeCorrScores :: PValNodeCorrScores
+    }
 
 -- Basic
 

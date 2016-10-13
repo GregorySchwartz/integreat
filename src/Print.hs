@@ -12,6 +12,9 @@ module Print
     ) where
 
 -- Standard
+import Data.List
+import qualified Data.Map.Strict as Map
+import Data.Monoid
 
 -- Cabal
 import qualified Data.Text as T
@@ -24,11 +27,31 @@ import Types
 import Utility
 
 -- | Print the node correlation scores after integration.
-printNodeCorrScores :: IDVec -> NodeCorrScores -> T.Text
-printNodeCorrScores (IDVec idVec) =
-    T.append "vertex,value\n"
+printNodeCorrScores :: IDVec -> NodeCorrScoresInfo -> T.Text
+printNodeCorrScores (IDVec idVec) info =
+    T.append (header <> "\n")
         . T.unlines
-        . V.toList
-        . V.imap (\i v -> T.concat [unID . (V.!) idVec $ i, ",", showt v])
-        . VS.convert
-        . unNodeCorrScores
+        . foldl'
+            (\acc -> zipWith (\x y -> x <> "," <> showt y) acc . V.toList)
+            (fmap (unID . (V.!) idVec) [0..(V.length idVec - 1)])
+        $ cols
+  where
+    header = T.intercalate ","
+           . ("vertex" :)
+           $ ( fmap ((\(LevelName !x, LevelName !y) -> x <> "_" <> y) . fst)
+             . Map.toAscList
+             . unNodeCorrScoresMap
+             . nodeCorrScoresMap
+             $ info
+             )
+          <> ["average", "rankProd", "pValRankProd"]
+    cols = ( fmap (unNodeCorrScores . snd)
+           . Map.toAscList
+           . unNodeCorrScoresMap
+           . nodeCorrScoresMap
+           $ info
+           )
+        <> [ unFlatNodeCorrScores . avgNodeCorrScores $ info
+           , unFlatNodeCorrScores . rankProdNodeCorrScores $ info
+           , unPValNodeCorrScores . rankProdPValNodeCorrScores $ info
+           ]

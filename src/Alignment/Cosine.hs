@@ -34,6 +34,7 @@ cosineIntegrate :: VertexSimMap
                 -> NodeCorrScores
 cosineIntegrate vMap l1 l2 e1 e2 =
     NodeCorrScores
+        . VS.convert
         . VS.map applyCosine
         . VS.enumFromN 0
         . rows

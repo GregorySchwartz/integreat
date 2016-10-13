@@ -11,6 +11,7 @@ entities.
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Main where
 
@@ -30,7 +31,12 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Csv as CSV
 import qualified Control.Lens as L
+import Control.Monad.Trans
 import Options.Generic
+
+import qualified Foreign.R as R
+import Language.R.Instance as R
+import Language.R.QQ
 
 -- Local
 import Types
@@ -52,7 +58,7 @@ data Options = Options { dataInput       :: Maybe String
                        , alignmentMethod :: Maybe String
                                         <?> "([CosineSimilarity] | RandomWalker | CSRW) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
                        , edgeMethod      :: Maybe String
-                                        <?> "([ARACNE BANDWIDTH] | KendallCorrelation) The method to use for the edges between entities in the coexpression matrix. The default bandwith for ARACNE is 0.1."
+                                        <?> "([KendallCorrelation] | ARACNE BANDWIDTH) The method to use for the edges between entities in the coexpression matrix. The default bandwith for ARACNE is 0.1."
                        , walkerRestart   :: Maybe Double
                                         <?> "([0.25] | PROBABILITY) For the random walker algorithm, the probability of making  a jump to a random vertex. Recommended to be the ratio of  the total number of vertices in the top 99% smallest  subnetworks to the total number of nodes in the reduced  product graph (Jeong, 2015)."
                        , steps           :: Maybe Int
@@ -97,7 +103,7 @@ getIntegrationInput opts = do
                         (fmap (vertexCsvToLevels idMap . V.toList))
                         vertexContents
 
-    let edgeSimMethod = maybe (ARACNE 0.1) read . unHelpful . edgeMethod $ opts
+    let edgeSimMethod = maybe KendallCorrelation read . unHelpful . edgeMethod $ opts
         edgeSimMap    = EdgeSimMap
                       . Map.fromList
                       . fmap ( L.over L._2 ( getSimMat edgeSimMethod
@@ -139,7 +145,7 @@ getPremadeIntegrationInput opts = do
     if unHelpful . test $ opts
         then return
            . getPremadeNetworks
-           . L.over L._1 Just 
+           . L.over L._1 Just
            $ (read contents :: ([String], [([String], [(String, String, Double)])]))
         else return
            . getPremadeNetworks
@@ -147,9 +153,9 @@ getPremadeIntegrationInput opts = do
            $ (read contents :: [([String], [(String, String, Double)])])
 
 -- | Show the accuracy of a test analysis.
-showAccuracy :: Set.Set ID -> IDVec -> NodeCorrScores -> T.Text
-showAccuracy truthSet idVec nodeCorrScores =
-    T.pack . show . getAccuracy truthSet idVec $ nodeCorrScores
+showAccuracy :: Set.Set ID -> IDVec -> NodeCorrScoresInfo -> T.Text
+showAccuracy truthSet idVec nodeCorrScoresInfo =
+    T.pack . show . getAccuracy truthSet idVec $ nodeCorrScoresInfo
 
 main :: IO ()
 main = do
@@ -163,7 +169,7 @@ main = do
             . premade
             $ opts
 
-    nodeCorrScores <-
+    nodeCorrScoresMap <-
         case maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts of
             CosineSimilarity -> integrateCosineSim
                 vertexSimMap
@@ -188,12 +194,19 @@ main = do
                 )
                 (Counter . fromMaybe 100 . unHelpful . steps $ opts)
 
-    if unHelpful . test $ opts
-        then T.putStr
-           . maybe
-                (error "Truth set not found.")
-                (\x -> showAccuracy x idVec nodeCorrScores)
-           $ truthSet
-        else T.putStr . printNodeCorrScores idVec $ nodeCorrScores
+    R.withEmbeddedR R.defaultConfig $ R.runRegion $ do
+        nodeCorrScoresInfo <- getNodeCorrScoresInfo nodeCorrScoresMap
 
-    return ()
+        if unHelpful . test $ opts
+            then liftIO
+               . T.putStr
+               . maybe
+                       (error "Truth set not found.")
+                       (\x -> showAccuracy x idVec nodeCorrScoresInfo)
+               $ truthSet
+            else liftIO
+               . T.putStr
+               . printNodeCorrScores idVec
+               $ nodeCorrScoresInfo
+
+        return ()

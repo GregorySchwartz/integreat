@@ -17,8 +17,10 @@ module Utility
     , removeMatchFilter
     , applyRows
     , avgVec
+    , avgVecVec
     , getVertexSim
     , pairs
+    , pairsM
     , triples
     , flipToo
     , listToTuple
@@ -116,6 +118,12 @@ applyRows f = fromList . fmap f . toColumns . fromRows
 avgVec :: Vector Double -> Double
 avgVec xs = VS.sum xs / (fromIntegral $ VS.length xs)
 
+-- | Average entries of a list of vectors.
+avgVecVec :: [V.Vector Double] -> V.Vector Double
+avgVecVec xs = fmap (/ genericLength xs)
+             . foldl1' (V.zipWith (+))
+             $ xs
+
 -- | Get the vertex similarity matrix for two levels, erroring out if the
 -- levels don't exist.
 getVertexSim :: LevelName -> LevelName -> VertexSimMap -> VertexSimMatrix
@@ -138,6 +146,11 @@ getVertexSim l1 l2 (VertexSimMap vMap) =
 -- extract the unique pairings of a list and apply a function to them.
 pairs :: (a -> a -> b) -> [a] -> [b]
 pairs f l = [f x y | (x:ys) <- tails l, y <- ys]
+
+-- | Extract the unique pairings of a list and apply a function to them within a
+-- monad.
+pairsM :: (Monad m) => (a -> a -> m b) -> [a] -> m [b]
+pairsM f l = sequence [f x y | (x:ys) <- tails l, y <- ys]
 
 -- | Extract the unique triplets of a list and apply a function to them.
 triples :: (a -> a -> a -> b) -> [a] -> [b]
@@ -183,7 +196,7 @@ rankNodeCorrScores (IDVec idVec) = zip [1..]
 -- five changed vertices out off 10 and two were rank 8 and 10 while the others
 -- were in the top five, we would have (1 - ((3 + 5) / (10 + 9 + 8 + 7 + 6))) as
 -- the accuracy."
-getAccuracy :: Set.Set ID -> IDVec -> NodeCorrScores -> Double
+getAccuracy :: Set.Set ID -> IDVec -> NodeCorrScoresInfo -> Double
 getAccuracy truth (IDVec idVec) = (1 -)
                                 . (/ fact)
                                 . sum
@@ -195,6 +208,9 @@ getAccuracy truth (IDVec idVec) = (1 -)
                                        )
                                 . filter (flip Set.member truth . snd)
                                 . rankNodeCorrScores (IDVec idVec)
+                                . NodeCorrScores
+                                . unFlatNodeCorrScores
+                                . avgNodeCorrScores
   where
     fact = fromIntegral
          . sum
