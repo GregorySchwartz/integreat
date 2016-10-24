@@ -40,6 +40,7 @@ newtype MaximumEdge      = MaximumEdge { unMaximumEdge :: Double }
 newtype EntityDiff       = EntityDiff  { unEntityDiff  :: T.Text }
 newtype Size             = Size Int
 newtype Counter          = Counter Int deriving (Eq, Ord, Num)
+newtype NumSamples       = NumSamples { unNumSamples :: Int }
 newtype WalkerRestart    = WalkerRestart { unWalkerRestart :: Double }
 newtype DataSetName      = DataSetName T.Text deriving (Eq, Ord, Show)
 newtype LevelName        = LevelName { unLevelName :: T.Text }
@@ -169,14 +170,14 @@ instance FromNamedRecord VertexEntry
 instance ToNamedRecord VertexEntry
 instance DefaultOrdered VertexEntry
 
-makeLenses ''Entity
-           
 data NodeCorrScoresInfo = NodeCorrScoresInfo
     { nodeCorrScoresMap          :: NodeCorrScoresMap
     , avgNodeCorrScores          :: FlatNodeCorrScores
     , rankProdNodeCorrScores     :: FlatNodeCorrScores
     , rankProdPValNodeCorrScores :: PValNodeCorrScores
     }
+
+makeLenses ''Entity
 
 -- Basic
 

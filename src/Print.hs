@@ -15,6 +15,7 @@ module Print
 import Data.List
 import qualified Data.Map.Strict as Map
 import Data.Monoid
+import Control.Monad
 
 -- Cabal
 import qualified Data.Text as T
@@ -27,17 +28,20 @@ import Types
 import Utility
 
 -- | Print the node correlation scores after integration.
-printNodeCorrScores :: IDVec -> NodeCorrScoresInfo -> T.Text
-printNodeCorrScores (IDVec idVec) info =
+printNodeCorrScores :: IDVec
+                    -> Maybe UnifiedData
+                    -> NodeCorrScoresInfo
+                    -> T.Text
+printNodeCorrScores (IDVec idVec) unified info =
     T.append (header <> "\n")
         . T.unlines
         . foldl'
             (\acc -> zipWith (\x y -> x <> "," <> showt y) acc . V.toList)
-            (fmap (unID . (V.!) idVec) [0..(V.length idVec - 1)])
+            vertexCols
         $ cols
   where
     header = T.intercalate ","
-           . ("vertex" :)
+           . ("vertex,numSamples" :)
            $ ( fmap ((\(LevelName !x, LevelName !y) -> x <> "_" <> y) . fst)
              . Map.toAscList
              . unNodeCorrScoresMap
@@ -45,13 +49,21 @@ printNodeCorrScores (IDVec idVec) info =
              $ info
              )
           <> ["average", "rankProd", "pValRankProd"]
-    cols = ( fmap (unNodeCorrScores . snd)
-           . Map.toAscList
-           . unNodeCorrScoresMap
-           . nodeCorrScoresMap
-           $ info
-           )
-        <> [ unFlatNodeCorrScores . avgNodeCorrScores $ info
-           , unFlatNodeCorrScores . rankProdNodeCorrScores $ info
-           , unPValNodeCorrScores . rankProdPValNodeCorrScores $ info
-           ]
+    vertexCols  = fmap vertexCol [0..(V.length idVec - 1)]
+    vertexCol x = T.intercalate "," [ unID . (V.!) idVec $ x
+                                    , maybe "0" (T.pack . show . Map.size)
+                                    . (=<<) ( Map.lookup ((V.!) idVec x)
+                                            . unUnifiedData
+                                            )
+                                    $ unified
+                                    ]
+    cols        = ( fmap (unNodeCorrScores . snd)
+                  . Map.toAscList
+                  . unNodeCorrScoresMap
+                  . nodeCorrScoresMap
+                  $ info
+                  )
+               <> [ unFlatNodeCorrScores . avgNodeCorrScores $ info
+                  , unFlatNodeCorrScores . rankProdNodeCorrScores $ info
+                  , unPValNodeCorrScores . rankProdPValNodeCorrScores $ info
+                  ]

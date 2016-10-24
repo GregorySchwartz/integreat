@@ -67,6 +67,8 @@ data Options = Options { dataInput       :: Maybe String
                                         <?> "Whether the input data (dataInput) is a pre-made network of the format \"[([\"VERTEX\"], [(\"SOURCE\", \"DESTINATION\", WEIGHT)])]\", where VERTEX, SOURCE, and DESTINATION are of type INT starting at 0, in order, and WEIGHT is a DOUBLE representing the weight of the edge between SOURCE and DESTINATION."
                        , test            :: Bool
                                         <?> "Whether the input data from premade is from a test run. If supplied, the output is changed to an accuracy measure. In this case, we get the total rank below the number of permuted vertices divided by the theoretical maximum (so if there were five changed vertices out off 10 and two were rank 8 and 10 while the others were in the top five, we would have (1 - ((3 + 5) / (10 + 9 + 8 + 7 + 6))) as the accuracy."
+                       , entityFilter    :: Maybe Int
+                                        <?> "The minimum number of samples an entity must appear in, otherwise the entity is removed from the analysis."
                        }
                deriving (Generic)
 
@@ -75,66 +77,79 @@ instance ParseRecord Options
 -- | Get all of the required information for integration.
 getIntegrationInput
     :: Options
-    -> IO (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
+    -> R s (Maybe (Set.Set ID), Maybe UnifiedData, IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
 getIntegrationInput opts = do
     let processCsv = snd . either error id
 
-    dataEntries   <- fmap (processCsv . CSV.decodeByName)
+    dataEntries   <- liftIO
+                   . fmap (processCsv . CSV.decodeByName)
                    . maybe CL.getContents CL.readFile
                    . unHelpful
                    . dataInput
                    $ opts
 
-    let levels       =
-            entitiesToLevels . datasToEntities . V.toList $ dataEntries
-        unifiedData  = unifyAllLevels . fmap snd $ levels
-        levelNames   = Set.toList . Set.fromList . fmap fst $ levels
-        idMap        = getIDMap unifiedData
-        idVec        = getIDVec unifiedData
-        eDiff        = fmap EntityDiff . unHelpful . entityDiff $ opts
-
-    let vertexContents =
+    let levels         = entitiesToLevels
+                       . (\x -> maybe x (flip filterEntities x) numSamples)
+                       . datasToEntities
+                       . V.toList
+                       $ dataEntries
+        numSamples     = fmap NumSamples . unHelpful . entityFilter $ opts
+        unifiedData    = unifyAllLevels . fmap snd $ levels
+        levelNames     = Set.toList . Set.fromList . fmap fst $ levels
+        idMap          = getIDMap unifiedData
+        idVec          = getIDVec unifiedData
+        eDiff          = fmap EntityDiff . unHelpful . entityDiff $ opts
+        vertexContents =
             fmap (fmap (processCsv . CSV.decodeByName) . CL.readFile)
                 . unHelpful
                 . vertexInput
                 $ opts
-    vertexSimMap <- maybe
+
+    vertexSimMap <- liftIO
+                  . maybe
                         (return . defVertexSimMap idMap $ levelNames)
                         (fmap (vertexCsvToLevels idMap . V.toList))
-                        vertexContents
+                  $ vertexContents
 
-    let edgeSimMethod = maybe KendallCorrelation read . unHelpful . edgeMethod $ opts
-        edgeSimMap    = EdgeSimMap
-                      . Map.fromList
-                      . fmap ( L.over L._2 ( getSimMat edgeSimMethod
-                                           . standardizeLevel idMap
-                                           )
-                             )
-                      $ levels
-        getSimMat (ARACNE h)         = getSimMatAracne
-                                        (Bandwidth h)
-                                        eDiff
-                                        idMap
+    let edgeSimMethod = maybe KendallCorrelation read
+                      . unHelpful
+                      . edgeMethod
+                      $ opts
+        getSimMat (ARACNE h) = return
+                             . getSimMatAracne
+                               (Bandwidth h)
+                               eDiff
+                               idMap
         getSimMat KendallCorrelation = getSimMatKendall
                                         (Default 0)
                                         eDiff
                                         (MaximumEdge 1)
                                         idMap
-        grMap = GrMap
-              . Map.fromList
-              . fmap ( L.over L._2 ( getGrMap edgeSimMethod
-                                   . standardizeLevel idMap
-                                   )
-                     )
-              $ levels
-        getGrMap KendallCorrelation = getGrKendall eDiff (MaximumEdge 1) idMap
 
-    return (Nothing, idMap, idVec, vertexSimMap, edgeSimMap, grMap)
+    edgeSimMap   <- fmap (EdgeSimMap . Map.fromList)
+                  . mapM ( L.sequenceOf L._2
+                         . L.over L._2 ( getSimMat edgeSimMethod
+                                       . standardizeLevel idMap
+                                       )
+                         )
+                  $ levels
+
+    let getGrMap KendallCorrelation = getGrKendall eDiff (MaximumEdge 1) idMap
+    
+    grMap <- fmap (GrMap . Map.fromList)
+           . mapM ( L.sequenceOf L._2
+                  . L.over L._2 ( getGrMap edgeSimMethod
+                                . standardizeLevel idMap
+                                )
+                  )
+           $ levels
+
+    return (Nothing, Just unifiedData, idMap, idVec, vertexSimMap, edgeSimMap, grMap)
 
 -- | Get all of the network info that is pre-made for input into the integration method.
 getPremadeIntegrationInput
     :: Options
-    -> IO (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
+    -> IO (Maybe (Set.Set ID), Maybe UnifiedData, IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
 getPremadeIntegrationInput opts = do
 
     contents <- maybe getContents readFile
@@ -163,38 +178,41 @@ main = do
                       \ Integrate data from multiple sources to find consistent\
                       \ (or inconsistent) entities."
 
-    (truthSet, idMap, idVec, vertexSimMap, edgeSimMap, grMap) <-
-        bool (getIntegrationInput opts) (getPremadeIntegrationInput opts)
-            . unHelpful
-            . premade
-            $ opts
-
-    nodeCorrScoresMap <-
-        case maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts of
-            CosineSimilarity -> integrateCosineSim
-                vertexSimMap
-                edgeSimMap
-            RandomWalker -> integrateWalker
-                ( WalkerRestart
-                . fromMaybe 0.25
-                . unHelpful
-                . walkerRestart
-                $ opts
-                )
-                (Counter . fromMaybe 100 . unHelpful . steps $ opts)
-                grMap
-            CSRW -> integrateCSRW
-                vertexSimMap
-                edgeSimMap
-                ( WalkerRestart
-                . fromMaybe 0.05
-                . unHelpful
-                . walkerRestart
-                $ opts
-                )
-                (Counter . fromMaybe 100 . unHelpful . steps $ opts)
-
     R.withEmbeddedR R.defaultConfig $ R.runRegion $ do
+        (truthSet, unifiedData, idMap, idVec, vertexSimMap, edgeSimMap, grMap) <-
+            bool (getIntegrationInput opts) (liftIO $ getPremadeIntegrationInput opts)
+                . unHelpful
+                . premade
+                $ opts
+
+        let alignment =
+                maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts
+
+        nodeCorrScoresMap <- case alignment of
+            CosineSimilarity -> liftIO
+                $ integrateCosineSim vertexSimMap edgeSimMap
+            RandomWalker -> liftIO
+                $ integrateWalker
+                    ( WalkerRestart
+                    . fromMaybe 0.25
+                    . unHelpful
+                    . walkerRestart
+                    $ opts
+                    )
+                    (Counter . fromMaybe 100 . unHelpful . steps $ opts)
+                    grMap
+            CSRW -> liftIO
+                $ integrateCSRW
+                    vertexSimMap
+                    edgeSimMap
+                    ( WalkerRestart
+                    . fromMaybe 0.05
+                    . unHelpful
+                    . walkerRestart
+                    $ opts
+                    )
+                    (Counter . fromMaybe 100 . unHelpful . steps $ opts)
+
         nodeCorrScoresInfo <- getNodeCorrScoresInfo nodeCorrScoresMap
 
         if unHelpful . test $ opts
@@ -206,7 +224,7 @@ main = do
                $ truthSet
             else liftIO
                . T.putStr
-               . printNodeCorrScores idVec
+               . printNodeCorrScores idVec unifiedData
                $ nodeCorrScoresInfo
 
         return ()

@@ -11,6 +11,7 @@ module Load
     ( datasToEntities
     , entitiesToLevels
     , unifyAllLevels
+    , filterEntities
     , getIDVec
     , getIDMap
     , defVertexSimMap
@@ -20,10 +21,12 @@ module Load
     ) where
 
 -- Standard
+import Data.List
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import qualified Data.Foldable as F
+import Data.Function (on)
 
 -- Cabal
 import qualified Data.Vector as V
@@ -66,6 +69,13 @@ entitiesToLevels = fmap (L.over L._2 Level)
 unifyAllLevels :: [Level] -> UnifiedData
 unifyAllLevels = UnifiedData . Map.unionsWith Map.union . fmap unLevel
 
+-- | Filter entities that appear in less than the specified amount.
+filterEntities :: NumSamples -> [Entity] -> [Entity]
+filterEntities (NumSamples numSamples) = mconcat
+                                       . filter ((>= numSamples) . length)
+                                       . groupBy ((==) `on` _entityID)
+                                       . sortBy (compare `on` _entityID)
+    
 -- | Get a vector of all IDs for easy indexing.
 getIDVec :: UnifiedData -> IDVec
 getIDVec =
@@ -159,7 +169,7 @@ getPremadeIDVec = IDVec . V.fromList . fmap (ID . T.pack)
 getPremadeIDMap :: [String] -> IDMap
 getPremadeIDMap xs =
     IDMap . Map.fromList . flip zip (fmap read xs) . fmap (ID . T.pack) $ xs
-    
+
 -- | Get the graph from a list of edges. Assumes the IDs integers,
 -- starting at 0.
 getPremadeGr :: IDMap -> [(String, String, Double)] -> LevelGr
@@ -181,9 +191,9 @@ getPremadeEdgeSimMatrix (IDMap idMap) =
 -- the IDs are integers, starting at 0, with everything in order.
 getPremadeNetworks
     :: (Maybe [String], [([String], [(String, String, Double)])])
-    -> (Maybe (Set.Set ID), IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
+    -> (Maybe (Set.Set ID), Maybe UnifiedData, IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
 getPremadeNetworks (!changedVerticesString, !allNetworks) =
-    (changedVertices, idMap, idVec, vertexSimMap, edgeSimMap, grMap)
+    (changedVertices, Nothing, idMap, idVec, vertexSimMap, edgeSimMap, grMap)
   where
     changedVertices =
         fmap (Set.fromList . fmap (ID . T.pack)) $ changedVerticesString

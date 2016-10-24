@@ -6,6 +6,8 @@ matrix using different kinds of correlations as weights.
 -}
 
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Edge.Correlation
     ( getGrKendall
@@ -19,13 +21,18 @@ import Data.List
 import qualified Data.Sequence as Seq
 import qualified Data.Map.Strict as Map
 import qualified Data.Foldable as F
+import Control.Monad
 
 -- Cabal
 import qualified Data.Vector as V
 import Data.Graph.Inductive
 import qualified Control.Lens as L
-import Numeric.LinearAlgebra
-import Statistics.Correlation.Kendall
+import qualified Numeric.LinearAlgebra as N
+
+import qualified Foreign.R as R
+import Language.R.Instance as R
+import Language.R.QQ
+import qualified Language.R.Literal as R
 
 -- Local
 import Types
@@ -41,27 +48,28 @@ getGrKendall :: Maybe EntityDiff
              -> MaximumEdge
              -> IDMap
              -> StandardLevel
-             -> LevelGr
+             -> R s LevelGr
 getGrKendall
     entityDiff
     (MaximumEdge maxEdge)
     (IDMap idMap)
     (StandardLevel level) =
-    LevelGr
-        . undir
-        . mkGraph (zip [0..Map.size idMap] [0..Map.size idMap])
-        . fmap (\((!x, !y), !z) -> (x, y, z))
-        . pairs getCorr
+    fmap ( LevelGr
+         . undir
+         . mkGraph (zip [0..Map.size idMap] [0..Map.size idMap])
+         . fmap (\((!x, !y), !z) -> (x, y, z))
+         . catMaybes
+         )
+        . pairsM getCorr
         . fmap (L.over L._2 (V.fromList . F.toList))
         . Map.toList
         $ level
   where
-      getCorr ((!id1, !idx1), !x) ((!id2, !idx2), !y) =
-          ( (idx1 , idx2)
-          , bool (kendallCorrelate x y) maxEdge
-          . sameWithEntityDiff entityDiff id1
-          $ id2
-          )
+      getCorr ((!id1, !idx1), !x) ((!id2, !idx2), !y) = do
+          res <- bool (kendallCorrelate x y) (return $ Just maxEdge)
+               . sameWithEntityDiff entityDiff id1
+               $ id2
+          return . fmap ((idx1 , idx2),) $ res
       keyNotFound k = "ID: " ++ show k ++ " not found."
 
 -- | Take one level and get the similarity matrix by using correlations (a
@@ -75,37 +83,53 @@ getSimMatKendall :: Default
                  -> MaximumEdge
                  -> IDMap
                  -> StandardLevel
-                 -> EdgeSimMatrix
+                 -> R s EdgeSimMatrix
 getSimMatKendall (Default def)
                  entityDiff
                  (MaximumEdge maxEdge)
                  (IDMap idMap)
                  (StandardLevel level) =
-    EdgeSimMatrix
-        . assoc (Map.size idMap, Map.size idMap) def
-        . concatMap flipToo
-        . pairs getCorr
+    fmap ( EdgeSimMatrix
+         . N.assoc (Map.size idMap, Map.size idMap) def
+         . mappend diagonal
+         . concatMap flipToo
+         . catMaybes
+         )
+        . pairsM getCorr
         . fmap (L.over L._2 (V.fromList . F.toList))
         . Map.toList
         $ level
   where
-      getCorr ((!id1, !idx1), !x) ((!id2, !idx2), !y) =
-          ( (idx1 , idx2)
-          , bool (kendallCorrelate x y) maxEdge
-          . sameWithEntityDiff entityDiff id1
-          $ id2
-          )
+      diagonal = take (Map.size idMap)
+               . flip zip [1,1..]
+               . iterate (L.over L.both (+ 1))
+               $ (0, 0)
+      getCorr ((!id1, !idx1), !x) ((!id2, !idx2), !y) = do
+          res <- bool (kendallCorrelate x y) (return $ Just maxEdge)
+               . sameWithEntityDiff entityDiff id1
+               $ id2
+          return . fmap ((idx1 , idx2),) $ res
       keyNotFound k = "ID: " ++ show k ++ " not found."
 
 -- | Correlate two groups of entities, where each group is a collection of
 -- measurements (specifically for a single type of entity, for instance
 -- a single protein). If there is missing data, we just say their is no
 -- correlation: 0.
-kendallCorrelate :: V.Vector (Maybe Entity) -> V.Vector (Maybe Entity) -> Double
-kendallCorrelate e1 =
-    (\x -> if isNaN x then 0 else x)
-        . kendall
-        . V.fromList
-        . catMaybes
-        . V.toList
-        . V.zipWith groupDataSets e1
+kendallCorrelate :: V.Vector (Maybe Entity)
+                 -> V.Vector (Maybe Entity)
+                 -> R s (Maybe Double)
+kendallCorrelate e1 e2 = do
+    let joined = catMaybes . V.toList . V.zipWith groupDataSets e1 $ e2
+        xs     = fmap fst joined
+        ys     = fmap snd joined
+
+    if length joined < 2
+        then return Nothing
+        else do
+            res <- [r| cor.test(xs_hs, ys_hs, method="kendall") |]
+            p   <- [r| res_hs$p.value |]
+            t   <- [r| res_hs$estimate |]
+
+            if (R.fromSomeSEXP p :: Double) >= 0.05
+                then return Nothing
+                else return . Just $ (R.fromSomeSEXP t :: Double)
