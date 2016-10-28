@@ -75,7 +75,7 @@ filterEntities (NumSamples numSamples) = mconcat
                                        . filter ((>= numSamples) . length)
                                        . groupBy ((==) `on` _entityID)
                                        . sortBy (compare `on` _entityID)
-    
+
 -- | Get a vector of all IDs for easy indexing.
 getIDVec :: UnifiedData -> IDVec
 getIDVec =

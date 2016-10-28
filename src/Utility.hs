@@ -5,6 +5,7 @@ Collections all miscellaneous functions.
 -}
 
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Utility
     ( minMaxNorm
@@ -26,6 +27,8 @@ module Utility
     , listToTuple
     , sameWithEntityDiff
     , groupDataSets
+    , standardLevelToR
+    , rToMat
     , getAccuracy
     ) where
 
@@ -40,10 +43,18 @@ import Data.Function (on)
 -- Cabal
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
+import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.Text as T
 import Data.Graph.Inductive
+import qualified Data.Aeson as JSON
 import Control.Lens
 import Numeric.LinearAlgebra
+
+import qualified Foreign.R as R
+import Language.R.Instance as R
+import Language.R.QQ
+import qualified Language.R.Literal as R
+import H.Prelude
 
 -- Local
 import Types
@@ -190,6 +201,29 @@ rankNodeCorrScores (IDVec idVec) = zip [1..]
                                  . V.imap (\ !i !v -> (idVec V.! i, v))
                                  . VS.convert
                                  . unNodeCorrScores
+
+-- | Convert a standard level to an R data frame.
+standardLevelToR :: StandardLevel -> R.R s (R.SomeSEXP s)
+standardLevelToR (StandardLevel level) = do
+    let input = Map.map ((fmap . fmap) _entityValue)
+              . Map.mapKeys (show . snd)
+              $ level
+        cargo = B.unpack . JSON.encode $ input
+
+    [r| library(jsonlite) |]
+    [r| as.data.frame(fromJSON(cargo_hs)) |]
+
+-- | Convert an R matrix to a matrix.
+rToMat :: R.SomeSEXP s -> R.R s (Matrix Double)
+rToMat mat = do
+    [r| library(jsonlite) |]
+
+    package <- [r| gsub("\"NA\"", "0", toJSON(as.matrix(mat_hs))) |]
+
+    let lsls = JSON.decode (B.pack $ (R.fromSomeSEXP package :: String))
+            :: Maybe [[Double]]
+
+    return . fromLists . fromMaybe (error "Bad JSON parsing from R") $ lsls
 
 -- | Get the accuracy of a run. In this case, we get the total rank below the
 -- number of permuted vertices divided by the theoretical maximum (so if there were

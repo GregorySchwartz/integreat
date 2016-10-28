@@ -121,12 +121,12 @@ getIntegrationInput opts = do
                                eDiff
                                idMap
         getSimMat KendallCorrelation = getSimMatKendall
-                                        (Default 0)
                                         eDiff
                                         (MaximumEdge 1)
                                         idMap
 
-    edgeSimMap   <- fmap (EdgeSimMap . Map.fromList)
+    edgeSimMap   <- liftIO
+                  . fmap (EdgeSimMap . Map.fromList)
                   . mapM ( L.sequenceOf L._2
                          . L.over L._2 ( getSimMat edgeSimMethod
                                        . standardizeLevel idMap
@@ -135,8 +135,9 @@ getIntegrationInput opts = do
                   $ levels
 
     let getGrMap KendallCorrelation = getGrKendall eDiff (MaximumEdge 1) idMap
-    
-    grMap <- fmap (GrMap . Map.fromList)
+
+    grMap <- liftIO
+           . fmap (GrMap . Map.fromList)
            . mapM ( L.sequenceOf L._2
                   . L.over L._2 ( getGrMap edgeSimMethod
                                 . standardizeLevel idMap
