@@ -116,8 +116,8 @@ getRankProdNodeCorrScores :: [NodeCorrScores]
 getRankProdNodeCorrScores xs = do
     let crate = B.unpack . A.encode . fmap unNodeCorrScores $ xs
 
-    resultsDF <- [r| library("jsonlite")
-                     library("RankProd")
+    resultsDF <- [r| suppressPackageStartupMessages(library("jsonlite"))
+                     suppressPackageStartupMessages(library("RankProd"))
                      df = fromJSON(crate_hs)
                      x = capture.output(result <- RP(t(df), rep(1, ncol(t(df))), logged=TRUE))
                      result

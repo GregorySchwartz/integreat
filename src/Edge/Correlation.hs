@@ -123,8 +123,8 @@ getSimMatKendall entityDiff
 getSimMatKendallR :: StandardLevel -> R s EdgeSimMatrix
 getSimMatKendallR level = do
     rDF <- standardLevelToR level
-    
-    [r| library("psych") |]
+
+    [r| suppressPackageStartupMessages(library("psych")) |]
     rMat <- [r| df = corr.test(rDF_hs, method = "kendall", adjust = "none", ci = FALSE);
                 df$r[df$p >= 0.05] = 0
                 df$r

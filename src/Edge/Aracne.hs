@@ -11,9 +11,11 @@ http://dx.doi.org/10.1186/1471-2105-7-S1-S7
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Edge.Aracne
     ( getSimMatAracne
+    , getSimMatAracneR
     ) where
 
 -- Standard
@@ -31,6 +33,11 @@ import qualified Data.Vector as V
 import qualified Control.Lens as L
 import Numeric.LinearAlgebra
 import Statistics.Sample
+
+import qualified Foreign.R as R
+import Language.R.Instance as R
+import Language.R.QQ
+import qualified Language.R.Literal as R
 
 -- Local
 import Types
@@ -117,7 +124,7 @@ univariateKernel :: Bandwidth -> V.Vector Double -> Double -> Double
 univariateKernel (Bandwidth h) samples x =
     (1 / (fromIntegral . V.length $ samples))
         * (1 / ((sqrt (2 * pi)) * h))
-        * (V.sum . V.map gauss $ samples) 
+        * (V.sum . V.map gauss $ samples)
   where
     gauss sx     = exp (((\a -> traceShow (x, sx) a) $ (x - sx) ^ 2) / (2 * (h ^ 2)))
 
@@ -161,3 +168,21 @@ standardBivariateGauss x y samples =
     sig2 = 1 -- stdDev . fmap snd $ samples
     rho  = 0 -- covariance samples
          -- / ((stdDev . fmap fst $ samples) * (stdDev . fmap snd $ samples))
+
+-- | Complete R version.
+-- Take one level and get the similarity matrix by using mutual information (a
+-- co-expression network).
+-- Does *not* correct for positions with entityDiff here.
+getSimMatAracneR :: StandardLevel -> R.R s EdgeSimMatrix
+getSimMatAracneR level = do
+    rDF <- standardLevelToR level
+
+    [r| suppressPackageStartupMessages(library("minet")) |]
+    rMat <- [r| df = t(rDF_hs);
+                df = minet(df, method = "aracne", estimator = "mi.shrink", disc = "equalfreq");
+                df[is.na(df)] = 0
+                df
+            |]
+
+    res <- rToMat rMat
+    return . EdgeSimMatrix $ res

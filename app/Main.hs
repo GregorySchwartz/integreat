@@ -58,7 +58,7 @@ data Options = Options { dataInput       :: Maybe String
                        , alignmentMethod :: Maybe String
                                         <?> "([CosineSimilarity] | RandomWalker | CSRW) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
                        , edgeMethod      :: Maybe String
-                                        <?> "([KendallCorrelation] | ARACNE BANDWIDTH) The method to use for the edges between entities in the coexpression matrix. The default bandwith for ARACNE is 0.1."
+                                        <?> "([KendallCorrelation] | ARACNE) The method to use for the edges between entities in the coexpression matrix."
                        , walkerRestart   :: Maybe Double
                                         <?> "([0.25] | PROBABILITY) For the random walker algorithm, the probability of making  a jump to a random vertex. Recommended to be the ratio of  the total number of vertices in the top 99% smallest  subnetworks to the total number of nodes in the reduced  product graph (Jeong, 2015)."
                        , steps           :: Maybe Int
@@ -81,6 +81,7 @@ getIntegrationInput
 getIntegrationInput opts = do
     let processCsv = snd . either error id
 
+    liftIO $ hPutStrLn stderr "Getting data input."
     dataEntries   <- liftIO
                    . fmap (processCsv . CSV.decodeByName)
                    . maybe CL.getContents CL.readFile
@@ -105,6 +106,10 @@ getIntegrationInput opts = do
                 . vertexInput
                 $ opts
 
+    when (isJust vertexContents)
+        . liftIO
+        $ hPutStrLn stderr "Getting vertex similarities."
+        
     vertexSimMap <- liftIO
                   . maybe
                         (return . defVertexSimMap idMap $ levelNames)
@@ -115,18 +120,16 @@ getIntegrationInput opts = do
                       . unHelpful
                       . edgeMethod
                       $ opts
-        getSimMat (ARACNE h) = return
-                             . getSimMatAracne
-                               (Bandwidth h)
-                               eDiff
-                               idMap
-        getSimMat KendallCorrelation = getSimMatKendall
-                                        eDiff
-                                        (MaximumEdge 1)
-                                        idMap
+        getSimMat ARACNE = getSimMatAracneR
+        getSimMat KendallCorrelation = getSimMatKendallR
+        -- getSimMat KendallCorrelation = getSimMatKendall
+        --                                 eDiff
+        --                                 (MaximumEdge 1)
+        --                                 idMap
 
-    edgeSimMap   <- liftIO
-                  . fmap (EdgeSimMap . Map.fromList)
+    liftIO $ hPutStrLn stderr "Getting edge similarities."
+    
+    edgeSimMap   <- fmap (EdgeSimMap . Map.fromList)
                   . mapM ( L.sequenceOf L._2
                          . L.over L._2 ( getSimMat edgeSimMethod
                                        . standardizeLevel idMap
@@ -135,15 +138,18 @@ getIntegrationInput opts = do
                   $ levels
 
     let getGrMap KendallCorrelation = getGrKendall eDiff (MaximumEdge 1) idMap
+        getGrMap ARACNE             = undefined
 
-    grMap <- liftIO
-           . fmap (GrMap . Map.fromList)
-           . mapM ( L.sequenceOf L._2
-                  . L.over L._2 ( getGrMap edgeSimMethod
-                                . standardizeLevel idMap
-                                )
-                  )
-           $ levels
+    grMap <- if edgeSimMethod == KendallCorrelation
+                then liftIO
+                   . fmap (GrMap . Map.fromList)
+                   . mapM ( L.sequenceOf L._2
+                           . L.over L._2 ( getGrMap edgeSimMethod
+                                           . standardizeLevel idMap
+                                           )
+                           )
+                   $ levels
+                else return . GrMap $ Map.empty
 
     return (Nothing, Just unifiedData, idMap, idVec, vertexSimMap, edgeSimMap, grMap)
 
@@ -179,6 +185,8 @@ main = do
                       \ Integrate data from multiple sources to find consistent\
                       \ (or inconsistent) entities."
 
+    hPutStrLn stderr "Starting R thread within Haskell."
+    
     R.withEmbeddedR R.defaultConfig $ R.runRegion $ do
         (truthSet, unifiedData, idMap, idVec, vertexSimMap, edgeSimMap, grMap) <-
             bool (getIntegrationInput opts) (liftIO $ getPremadeIntegrationInput opts)
@@ -189,6 +197,9 @@ main = do
         let alignment =
                 maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts
 
+        liftIO $
+            hPutStrLn stderr "Calculating vertex similarities between networks."
+        
         nodeCorrScoresMap <- case alignment of
             CosineSimilarity -> liftIO
                 $ integrateCosineSim vertexSimMap edgeSimMap
@@ -214,6 +225,8 @@ main = do
                     )
                     (Counter . fromMaybe 100 . unHelpful . steps $ opts)
 
+        liftIO $ hPutStrLn stderr "Calculating node correspondence scores."
+            
         nodeCorrScoresInfo <- getNodeCorrScoresInfo nodeCorrScoresMap
 
         if unHelpful . test $ opts

@@ -210,13 +210,13 @@ standardLevelToR (StandardLevel level) = do
               $ level
         cargo = B.unpack . JSON.encode $ input
 
-    [r| library(jsonlite) |]
+    [r| suppressPackageStartupMessages(library(jsonlite)) |]
     [r| as.data.frame(fromJSON(cargo_hs)) |]
 
 -- | Convert an R matrix to a matrix.
 rToMat :: R.SomeSEXP s -> R.R s (Matrix Double)
 rToMat mat = do
-    [r| library(jsonlite) |]
+    [r| suppressPackageStartupMessages(library(jsonlite)) |]
 
     package <- [r| gsub("\"NA\"", "0", toJSON(as.matrix(mat_hs))) |]
 

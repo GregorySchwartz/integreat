@@ -142,10 +142,7 @@ data AlignmentMethod
     | RandomWalker
     | CSRW
     deriving (Eq,Read,Show)
-data EdgeMethod
-    = ARACNE Double
-    | KendallCorrelation
-    deriving (Eq,Read,Show)
+data EdgeMethod = ARACNE | KendallCorrelation deriving (Eq,Read,Show)
 
 data DataEntry    = DataEntry { dataLevel     :: !T.Text
                               , dataReplicate :: !T.Text
