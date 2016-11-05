@@ -14,6 +14,7 @@ module Edge.Correlation
     ( getGrKendall
     , getSimMatKendall
     , getSimMatKendallR
+    , getSimMatSpearmanR
     ) where
 
 -- Standard
@@ -122,15 +123,17 @@ getSimMatKendall entityDiff
 -- Does *not* correct for positions with entityDiff here.
 getSimMatKendallR :: StandardLevel -> R s EdgeSimMatrix
 getSimMatKendallR level = do
-    rDF <- standardLevelToR level
+    rDF <- standardLevelToRJSON level
 
     [r| suppressPackageStartupMessages(library("psych")) |]
-    rMat <- [r| df = corr.test(rDF_hs, method = "kendall", adjust = "none", ci = FALSE);
-                df$r[df$p >= 0.05] = 0
+    rMat <- [r| write("Getting Kendall correlations.", stderr());
+                df = corr.test(rDF_hs, method = "kendall", adjust = "none", ci = FALSE);
+                write("Setting bad p-value correlations to 0", stderr());
+                df$r[df$p >= 0.05] = 0;
                 df$r
             |]
 
-    res <- rToMat rMat
+    res <- rToMatJSON rMat
     return . EdgeSimMatrix $ res
 
 -- | Correlate two groups of entities, where each group is a collection of
@@ -153,3 +156,23 @@ kendallCorrelate e1 e2 = R.runRegion $ do
             if (R.fromSomeSEXP p :: Double) >= 0.05
                 then return Nothing
                 else return . Just $ (R.fromSomeSEXP t :: Double)
+
+-- | Complete R version.
+-- Take one level and get the similarity matrix by using correlations (a
+-- co-expression network). The default value is applied to missing data.
+-- Consider using a value that would mean no correlation: 0.
+-- Does *not* correct for positions with entityDiff here.
+getSimMatSpearmanR :: StandardLevel -> R s EdgeSimMatrix
+getSimMatSpearmanR level = do
+    rDF <- standardLevelToRJSON level
+
+    [r| suppressPackageStartupMessages(library("psych")) |]
+    rMat <- [r| write("Getting Spearman correlations.", stderr());
+                df = corr.test(rDF_hs, method = "spearman", adjust = "none", ci = FALSE);
+                write("Setting bad p-value correlations to 0", stderr());
+                df$r[df$p >= 0.05] = 0
+                df$r
+            |]
+
+    res <- rToMatJSON rMat
+    return . EdgeSimMatrix $ res

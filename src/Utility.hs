@@ -27,8 +27,8 @@ module Utility
     , listToTuple
     , sameWithEntityDiff
     , groupDataSets
-    , standardLevelToR
-    , rToMat
+    , standardLevelToRJSON
+    , rToMatJSON
     , getAccuracy
     ) where
 
@@ -202,21 +202,61 @@ rankNodeCorrScores (IDVec idVec) = zip [1..]
                                  . VS.convert
                                  . unNodeCorrScores
 
+-- -- | Convert a standard level to an R data frame.
+-- standardLevelToR :: StandardLevel -> R.R s (R.SomeSEXP s)
+-- standardLevelToR (StandardLevel level) = do
+--     let input = Map.toAscList
+--               . Map.map (F.toList . (fmap . fmap) _entityValue)
+--               . Map.mapKeys (show . snd)
+--               $ level
+--         cargo = B.unpack . JSON.encode $ input
+
+--     [r| suppressPackageStartupMessages(library(jsonlite)) |]
+--     [r| as.data.frame(fromJSON(cargo_hs)) |]
+
 -- | Convert a standard level to an R data frame.
-standardLevelToR :: StandardLevel -> R.R s (R.SomeSEXP s)
-standardLevelToR (StandardLevel level) = do
+standardLevelToRJSON :: StandardLevel -> R.R s (R.SomeSEXP s)
+standardLevelToRJSON (StandardLevel level) = do
     let input = Map.map ((fmap . fmap) _entityValue)
               . Map.mapKeys (show . snd)
               $ level
         cargo = B.unpack . JSON.encode $ input
 
-    [r| suppressPackageStartupMessages(library(jsonlite)) |]
-    [r| as.data.frame(fromJSON(cargo_hs)) |]
+    [r| suppressPackageStartupMessages(library(jsonlite));
+        suppressPackageStartupMessages(library(gtools));
+        write("Sending JSON matrix to R.", stderr());
+        ls = fromJSON(cargo_hs);
+        ls = ls[mixedsort(names(ls))];
+        as.data.frame(ls) |]
 
 -- | Convert an R matrix to a matrix.
 rToMat :: R.SomeSEXP s -> R.R s (Matrix Double)
 rToMat mat = do
-    [r| suppressPackageStartupMessages(library(jsonlite)) |]
+    [r| library(reshape2) |]
+    df <- [r| mat = as.matrix(mat_hs);
+              mat[is.na(mat)] = 0;
+              df = as.data.frame(as.table(mat))
+              df
+          |]
+
+    var1 <- [r| df_hs$Var1 |]
+    var2 <- [r| df_hs$Var2 |]
+    val  <- [r| df_hs$Freq |]
+
+    let v1 = R.fromSomeSEXP df :: [Double]
+        v2 = R.fromSomeSEXP df :: [Double]
+        v  = R.fromSomeSEXP df :: [Double]
+        edges = zipWith3 (\x y z -> ((truncate x - 1, truncate y - 1), z)) v1 v2 v
+        size  = truncate . sqrt . fromIntegral . length $ v1
+
+    return . assoc (size, size) 0 $ edges
+
+-- | Convert an R matrix to a matrix using JSON.
+rToMatJSON :: R.SomeSEXP s -> R.R s (Matrix Double)
+rToMatJSON mat = do
+    [r| suppressPackageStartupMessages(library(jsonlite));
+        write("Sending JSON matrix from R to Haskell.", stderr())
+    |]
 
     package <- [r| gsub("\"NA\"", "0", toJSON(as.matrix(mat_hs))) |]
 

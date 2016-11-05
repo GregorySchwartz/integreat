@@ -118,6 +118,7 @@ getRankProdNodeCorrScores xs = do
 
     resultsDF <- [r| suppressPackageStartupMessages(library("jsonlite"))
                      suppressPackageStartupMessages(library("RankProd"))
+                     write("Getting rank product.", stderr());
                      df = fromJSON(crate_hs)
                      x = capture.output(result <- RP(t(df), rep(1, ncol(t(df))), logged=TRUE))
                      result

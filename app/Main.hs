@@ -49,26 +49,28 @@ import Integrate
 import Print
 
 -- | Command line arguments
-data Options = Options { dataInput       :: Maybe String
-                                        <?> "(FILE) The input file containing the data intensities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base level for the experiment, like \"proteomic_Myla\" or \"RNA_MyLa\" for instance), dataReplicate is the replicate in that experiment that the entity is from (the name of that data set with the replicate name, like \"RNA_MyLa_1\"), and vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
-                       , vertexInput     :: Maybe String
-                                        <?> "(FILE) The input file containing similarities between entities. Follows the format: vertexLevel1,vertexLevel2, vertex1,vertex2,similarity. vertexLevel1 is the level (the base title for the experiment, \"data set\") that vertex1 is from, vertexLevel2 is the level that vertex2 is from, and the similarity is a number representing the similarity between those two entities. If not specified, then the same entity (determined by vertex in data-input) will have a similarity of 1, different entities will have a similarity of 0."
-                       , entityDiff      :: Maybe T.Text
-                                        <?> "When comparing entities that are the same, ignore the text after this separator. Used for comparing phosphorylated positions with another level. For example, if we have a strings ARG29 and ARG29_7 that we want to compare, we want to say that their value is the highest in correlation, so this string would be \"_\""
-                       , alignmentMethod :: Maybe String
+data Options = Options { dataInput          :: Maybe String
+                                        <?> "([STDIN] | FILE) The input file containing the data intensities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base level for the experiment, like \"proteomic_Myla\" or \"RNA_MyLa\" for instance), dataReplicate is the replicate in that experiment that the entity is from (the name of that data set with the replicate name, like \"RNA_MyLa_1\"), and vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
+                       , vertexInput        :: Maybe String
+                                        <?> "([Nothing] | FILE) The input file containing similarities between entities. Follows the format: vertexLevel1,vertexLevel2, vertex1,vertex2,similarity. vertexLevel1 is the level (the base title for the experiment, \"data set\") that vertex1 is from, vertexLevel2 is the level that vertex2 is from, and the similarity is a number representing the similarity between those two entities. If not specified, then the same entity (determined by vertex in data-input) will have a similarity of 1, different entities will have a similarity of 0."
+                       , entityDiff         :: Maybe T.Text
+                                        <?> "([Nothing] | STRING) When comparing entities that are the same, ignore the text after this separator. Used for comparing phosphorylated positions with another level. For example, if we have a strings ARG29 and ARG29_7 that we want to compare, we want to say that their value is the highest in correlation, so this string would be \"_\""
+                       , alignmentMethod    :: Maybe String
                                         <?> "([CosineSimilarity] | RandomWalker | CSRW) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
-                       , edgeMethod      :: Maybe String
-                                        <?> "([KendallCorrelation] | ARACNE) The method to use for the edges between entities in the coexpression matrix."
-                       , walkerRestart   :: Maybe Double
+                       , edgeMethod         :: Maybe String
+                                        <?> "([SpearmanCorrelation] | KendallCorrelation | ARACNE) The method to use for the edges between entities in the coexpression matrix."
+                       , walkerRestart      :: Maybe Double
                                         <?> "([0.25] | PROBABILITY) For the random walker algorithm, the probability of making  a jump to a random vertex. Recommended to be the ratio of  the total number of vertices in the top 99% smallest  subnetworks to the total number of nodes in the reduced  product graph (Jeong, 2015)."
-                       , steps           :: Maybe Int
+                       , steps              :: Maybe Int
                                         <?> "([100] | STEPS) For the random walker algorithm, the number of steps to take  before stopping."
-                       , premade         :: Bool
-                                        <?> "Whether the input data (dataInput) is a pre-made network of the format \"[([\"VERTEX\"], [(\"SOURCE\", \"DESTINATION\", WEIGHT)])]\", where VERTEX, SOURCE, and DESTINATION are of type INT starting at 0, in order, and WEIGHT is a DOUBLE representing the weight of the edge between SOURCE and DESTINATION."
-                       , test            :: Bool
-                                        <?> "Whether the input data from premade is from a test run. If supplied, the output is changed to an accuracy measure. In this case, we get the total rank below the number of permuted vertices divided by the theoretical maximum (so if there were five changed vertices out off 10 and two were rank 8 and 10 while the others were in the top five, we would have (1 - ((3 + 5) / (10 + 9 + 8 + 7 + 6))) as the accuracy."
-                       , entityFilter    :: Maybe Int
-                                        <?> "The minimum number of samples an entity must appear in, otherwise the entity is removed from the analysis."
+                       , premade            :: Bool
+                                        <?> "([False] | BOOL) Whether the input data (dataInput) is a pre-made network of the format \"[([\"VERTEX\"], [(\"SOURCE\", \"DESTINATION\", WEIGHT)])]\", where VERTEX, SOURCE, and DESTINATION are of type INT starting at 0, in order, and WEIGHT is a DOUBLE representing the weight of the edge between SOURCE and DESTINATION."
+                       , test               :: Bool
+                                        <?> "([False] | BOOL) Whether the input data from premade is from a test run. If supplied, the output is changed to an accuracy measure. In this case, we get the total rank below the number of permuted vertices divided by the theoretical maximum (so if there were five changed vertices out off 10 and two were rank 8 and 10 while the others were in the top five, we would have (1 - ((3 + 5) / (10 + 9 + 8 + 7 + 6))) as the accuracy."
+                       , entityFilter       :: Maybe Int
+                                        <?> "([Nothing] | INT) The minimum number of samples an entity must appear in, otherwise the entity is removed from the analysis."
+                       , entityFilterStdDev :: Maybe Double
+                                        <?> "([Nothing] | DOUBLE) Remove entities that have less than this value for their standard deviation among all samples."
                        }
                deriving (Generic)
 
@@ -89,12 +91,15 @@ getIntegrationInput opts = do
                    . dataInput
                    $ opts
 
-    let levels         = entitiesToLevels
+    let numSamples     = fmap NumSamples . unHelpful . entityFilter $ opts
+        stdDevThresh   =
+            fmap StdDevThreshold . unHelpful . entityFilterStdDev $ opts
+        levels         = (\x -> maybe x (flip filterEntitiesStdDev x) stdDevThresh)
+                       . entitiesToLevels
                        . (\x -> maybe x (flip filterEntities x) numSamples)
                        . datasToEntities
                        . V.toList
                        $ dataEntries
-        numSamples     = fmap NumSamples . unHelpful . entityFilter $ opts
         unifiedData    = unifyAllLevels . fmap snd $ levels
         levelNames     = Set.toList . Set.fromList . fmap fst $ levels
         idMap          = getIDMap unifiedData
@@ -106,29 +111,37 @@ getIntegrationInput opts = do
                 . vertexInput
                 $ opts
 
+    liftIO . hPutStrLn stderr $ "Level information (Name, Number of entities):"
+    liftIO
+        . hPutStrLn stderr
+        . show
+        . fmap (L.over L._2 (Map.size . unLevel))
+        $ levels
+
     when (isJust vertexContents)
         . liftIO
         $ hPutStrLn stderr "Getting vertex similarities."
-        
+
     vertexSimMap <- liftIO
                   . maybe
                         (return . defVertexSimMap idMap $ levelNames)
                         (fmap (vertexCsvToLevels idMap . V.toList))
                   $ vertexContents
 
-    let edgeSimMethod = maybe KendallCorrelation read
+    let edgeSimMethod = maybe SpearmanCorrelation read
                       . unHelpful
                       . edgeMethod
                       $ opts
         getSimMat ARACNE = getSimMatAracneR
         getSimMat KendallCorrelation = getSimMatKendallR
+        getSimMat SpearmanCorrelation = getSimMatSpearmanR
         -- getSimMat KendallCorrelation = getSimMatKendall
         --                                 eDiff
         --                                 (MaximumEdge 1)
         --                                 idMap
 
     liftIO $ hPutStrLn stderr "Getting edge similarities."
-    
+
     edgeSimMap   <- fmap (EdgeSimMap . Map.fromList)
                   . mapM ( L.sequenceOf L._2
                          . L.over L._2 ( getSimMat edgeSimMethod
@@ -186,7 +199,7 @@ main = do
                       \ (or inconsistent) entities."
 
     hPutStrLn stderr "Starting R thread within Haskell."
-    
+
     R.withEmbeddedR R.defaultConfig $ R.runRegion $ do
         (truthSet, unifiedData, idMap, idVec, vertexSimMap, edgeSimMap, grMap) <-
             bool (getIntegrationInput opts) (liftIO $ getPremadeIntegrationInput opts)
@@ -199,7 +212,7 @@ main = do
 
         liftIO $
             hPutStrLn stderr "Calculating vertex similarities between networks."
-        
+
         nodeCorrScoresMap <- case alignment of
             CosineSimilarity -> liftIO
                 $ integrateCosineSim vertexSimMap edgeSimMap
@@ -226,7 +239,7 @@ main = do
                     (Counter . fromMaybe 100 . unHelpful . steps $ opts)
 
         liftIO $ hPutStrLn stderr "Calculating node correspondence scores."
-            
+
         nodeCorrScoresInfo <- getNodeCorrScoresInfo nodeCorrScoresMap
 
         if unHelpful . test $ opts

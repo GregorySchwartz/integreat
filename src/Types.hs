@@ -37,6 +37,7 @@ newtype ID               = ID { unID :: T.Text } deriving (Eq, Ord, Show)
 newtype Default          = Default { unDefault :: Double }
 newtype Bandwidth        = Bandwidth { unBandwidth :: Double }
 newtype MaximumEdge      = MaximumEdge { unMaximumEdge :: Double }
+newtype StdDevThreshold  = StdDevThreshold { unStdDevThreshold :: Double }
 newtype EntityDiff       = EntityDiff  { unEntityDiff  :: T.Text }
 newtype Size             = Size Int
 newtype Counter          = Counter Int deriving (Eq, Ord, Num)
@@ -142,7 +143,7 @@ data AlignmentMethod
     | RandomWalker
     | CSRW
     deriving (Eq,Read,Show)
-data EdgeMethod = ARACNE | KendallCorrelation deriving (Eq,Read,Show)
+data EdgeMethod = ARACNE | SpearmanCorrelation | KendallCorrelation deriving (Eq,Read,Show)
 
 data DataEntry    = DataEntry { dataLevel     :: !T.Text
                               , dataReplicate :: !T.Text

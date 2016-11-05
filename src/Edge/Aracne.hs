@@ -175,14 +175,18 @@ standardBivariateGauss x y samples =
 -- Does *not* correct for positions with entityDiff here.
 getSimMatAracneR :: StandardLevel -> R.R s EdgeSimMatrix
 getSimMatAracneR level = do
-    rDF <- standardLevelToR level
+    rDF <- standardLevelToRJSON level
 
     [r| suppressPackageStartupMessages(library("minet")) |]
     rMat <- [r| df = t(rDF_hs);
+                write("Starting minet.", stderr())
                 df = minet(df, method = "aracne", estimator = "mi.shrink", disc = "equalfreq");
+                write("Finished minet.", stderr())
                 df[is.na(df)] = 0
+                write("Zeros set for minet output.", stderr())
                 df
             |]
 
-    res <- rToMat rMat
+    res <- rToMatJSON rMat
+
     return . EdgeSimMatrix $ res

@@ -12,6 +12,7 @@ module Load
     , entitiesToLevels
     , unifyAllLevels
     , filterEntities
+    , filterEntitiesStdDev
     , getIDVec
     , getIDMap
     , defVertexSimMap
@@ -35,6 +36,7 @@ import qualified Data.Text as T
 import Data.Graph.Inductive
 import qualified Control.Lens as L
 import Numeric.LinearAlgebra
+import Statistics.Sample
 
 -- Local
 import Types
@@ -75,6 +77,25 @@ filterEntities (NumSamples numSamples) = mconcat
                                        . filter ((>= numSamples) . length)
                                        . groupBy ((==) `on` _entityID)
                                        . sortBy (compare `on` _entityID)
+
+-- | Filter entities that appear in less than the specified amount.
+filterEntitiesStdDev :: StdDevThreshold
+                     -> [(LevelName, Level)]
+                     -> [(LevelName, Level)]
+filterEntitiesStdDev (StdDevThreshold threshold) levels =
+    fmap filterGood levels
+  where
+    filterGood   = L.over
+                    L._2
+                    ( Level
+                    . Map.filterWithKey (\k _ -> Set.member k goodEntities)
+                    . unLevel
+                    )
+    goodEntities = Set.unions
+                 . fmap (Set.fromList . Map.keys . Map.filter p . unLevel . snd)
+                 $ levels
+    p            =
+        (>= threshold) . stdDev . V.fromList . fmap _entityValue . Map.elems
 
 -- | Get a vector of all IDs for easy indexing.
 getIDVec :: UnifiedData -> IDVec
