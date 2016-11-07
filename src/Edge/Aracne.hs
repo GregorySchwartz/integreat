@@ -173,8 +173,8 @@ standardBivariateGauss x y samples =
 -- Take one level and get the similarity matrix by using mutual information (a
 -- co-expression network).
 -- Does *not* correct for positions with entityDiff here.
-getSimMatAracneR :: StandardLevel -> R.R s EdgeSimMatrix
-getSimMatAracneR level = do
+getSimMatAracneR :: Size -> StandardLevel -> R.R s EdgeSimMatrix
+getSimMatAracneR size level = do
     rDF <- standardLevelToRJSON level
 
     [r| suppressPackageStartupMessages(library("minet")) |]
@@ -187,6 +187,6 @@ getSimMatAracneR level = do
                 df
             |]
 
-    res <- rToMatJSON rMat
+    res <- rToMatJSON size rMat
 
     return . EdgeSimMatrix $ res

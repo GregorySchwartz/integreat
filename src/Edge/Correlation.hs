@@ -121,8 +121,8 @@ getSimMatKendall entityDiff
 -- co-expression network). The default value is applied to missing data.
 -- Consider using a value that would mean no correlation: 0.
 -- Does *not* correct for positions with entityDiff here.
-getSimMatKendallR :: StandardLevel -> R s EdgeSimMatrix
-getSimMatKendallR level = do
+getSimMatKendallR :: Size -> StandardLevel -> R s EdgeSimMatrix
+getSimMatKendallR size level = do
     rDF <- standardLevelToRJSON level
 
     [r| suppressPackageStartupMessages(library("psych")) |]
@@ -133,7 +133,7 @@ getSimMatKendallR level = do
                 df$r
             |]
 
-    res <- rToMatJSON rMat
+    res <- rToMatJSON size rMat
     return . EdgeSimMatrix $ res
 
 -- | Correlate two groups of entities, where each group is a collection of
@@ -162,8 +162,8 @@ kendallCorrelate e1 e2 = R.runRegion $ do
 -- co-expression network). The default value is applied to missing data.
 -- Consider using a value that would mean no correlation: 0.
 -- Does *not* correct for positions with entityDiff here.
-getSimMatSpearmanR :: StandardLevel -> R s EdgeSimMatrix
-getSimMatSpearmanR level = do
+getSimMatSpearmanR :: Size -> StandardLevel -> R s EdgeSimMatrix
+getSimMatSpearmanR size level = do
     rDF <- standardLevelToRJSON level
 
     [r| suppressPackageStartupMessages(library("psych")) |]
@@ -174,5 +174,5 @@ getSimMatSpearmanR level = do
                 df$r
             |]
 
-    res <- rToMatJSON rMat
+    res <- rToMatJSON size rMat
     return . EdgeSimMatrix $ res

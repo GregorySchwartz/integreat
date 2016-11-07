@@ -252,18 +252,29 @@ rToMat mat = do
     return . assoc (size, size) 0 $ edges
 
 -- | Convert an R matrix to a matrix using JSON.
-rToMatJSON :: R.SomeSEXP s -> R.R s (Matrix Double)
-rToMatJSON mat = do
+rToMatJSON :: Size -> R.SomeSEXP s -> R.R s (Matrix Double)
+rToMatJSON (Size size) mat = do
     [r| suppressPackageStartupMessages(library(jsonlite));
         write("Sending JSON matrix from R to Haskell.", stderr())
     |]
 
-    package <- [r| gsub("\"NA\"", "0", toJSON(as.matrix(mat_hs))) |]
+    package <- [r| res = gsub("NA", "0", toJSON(as.data.frame(mat_hs)));
+                   res = gsub("X", "", res);
+                   res = gsub("\"_row\":\"", "\"_row\":", res);
+                   res = gsub("\"}", "}", res);
+                   res
+               |]
 
     let lsls = JSON.decode (B.pack $ (R.fromSomeSEXP package :: String))
-            :: Maybe [[Double]]
+            :: Maybe ([Map.Map String Double])
+        toUsable m = fmap (\(!row, (!col, !val)) -> ((truncate row, read col), val))
+                   . zip (repeat (m Map.! "_row"))
+                   . Map.toList
+                   . Map.delete "_row"
+                   $ m
+        newMat = concatMap toUsable .  fromMaybe (error "Bad JSON parsing from R") $ lsls
 
-    return . fromLists . fromMaybe (error "Bad JSON parsing from R") $ lsls
+    return . assoc (size, size) 0 $ newMat
 
 -- | Get the accuracy of a run. In this case, we get the total rank below the
 -- number of permuted vertices divided by the theoretical maximum (so if there were

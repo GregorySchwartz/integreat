@@ -132,9 +132,9 @@ getIntegrationInput opts = do
                       . unHelpful
                       . edgeMethod
                       $ opts
-        getSimMat ARACNE = getSimMatAracneR
-        getSimMat KendallCorrelation = getSimMatKendallR
-        getSimMat SpearmanCorrelation = getSimMatSpearmanR
+        getSimMat ARACNE = getSimMatAracneR (Size . Map.size . unIDMap $ idMap)
+        getSimMat KendallCorrelation = getSimMatKendallR (Size . Map.size . unIDMap $ idMap)
+        getSimMat SpearmanCorrelation = getSimMatSpearmanR (Size . Map.size . unIDMap $ idMap)
         -- getSimMat KendallCorrelation = getSimMatKendall
         --                                 eDiff
         --                                 (MaximumEdge 1)
