@@ -50,8 +50,8 @@ newtype IDVec            = IDVec { unIDVec :: V.Vector ID }
 newtype IDMap            = IDMap { unIDMap :: Map.Map ID Int }
 newtype WalkerState      =
     WalkerState { unWalkerState :: (Int, IMap.IntMap Int) }
-newtype WalkerStateCSRW  =
-    WalkerStateCSRW { unWalkerStateCSRW :: (Int, Int, TransProbMatrix) }
+-- newtype WalkerStateCSRW  =
+--     WalkerStateCSRW { unWalkerStateCSRW :: (Int, Int, TransProbMatrix) }
 
 newtype DataSet          = DataSet (Map.Map ID Entity)
 newtype StandardDataSets = StandardDataSets
@@ -69,10 +69,10 @@ newtype UnifiedData      =
 newtype SimVector =
     SimVector { unSimVector :: VS.Vector Double }
 newtype EdgeSimMatrix =
-    EdgeSimMatrix { unEdgeSimMatrix :: Matrix Double }
+    EdgeSimMatrix { unEdgeSimMatrix :: IMap.IntMap (IMap.IntMap Double) }
     deriving (Show)
-newtype VertexSimMatrix =
-    VertexSimMatrix { unVertexSimMatrix :: Matrix Double }
+newtype VertexSimValues =
+    VertexSimValues { unVertexSimValues :: [((Int, Int), Double)] }
     deriving (Show)
 newtype TransProbMatrix  =
     TransProbMatrix { unTransProbMatrix :: Matrix Double }
@@ -95,7 +95,7 @@ newtype GrMap            =
     deriving (Show)
 newtype VertexSimMap     =
     VertexSimMap { unVertexSimMap
-                :: (Map.Map LevelName (Map.Map LevelName VertexSimMatrix))
+                :: (Map.Map LevelName (Map.Map LevelName VertexSimValues))
                  }
     deriving (Show)
 
@@ -108,15 +108,15 @@ newtype Walker a =
              , MonadReader Environment
              , MonadState WalkerState
              )
-newtype WalkerCSRW a =
-    WalkerCSRW { unWalkerCSRW :: (ReaderT EnvironmentCSRW (StateT WalkerStateCSRW IO) a) }
-    deriving ( Functor
-             , Applicative
-             , Monad
-             , MonadIO
-             , MonadReader EnvironmentCSRW
-             , MonadState WalkerStateCSRW
-             )
+-- newtype WalkerCSRW a =
+--     WalkerCSRW { unWalkerCSRW :: (ReaderT EnvironmentCSRW (StateT WalkerStateCSRW IO) a) }
+--     deriving ( Functor
+--              , Applicative
+--              , Monad
+--              , MonadIO
+--              , MonadReader EnvironmentCSRW
+--              , MonadState WalkerStateCSRW
+--              )
 
 data Entity = Entity { _entityID    :: !ID
                      , _dataSetName :: !DataSetName
@@ -130,19 +130,19 @@ data Environment =
                 , restart :: !WalkerRestart
                 , v0      :: !Int
                 }
-data EnvironmentCSRW =
-    EnvironmentCSRW { edgeMat1  :: !EdgeSimMatrix
-                    , edgeMat2  :: !EdgeSimMatrix
-                    , vertexMat :: !VertexSimMatrix
-                    , restart   :: !WalkerRestart
-                    }
+-- data EnvironmentCSRW =
+--     EnvironmentCSRW { edgeMat1  :: !EdgeSimMatrix
+--                     , edgeMat2  :: !EdgeSimMatrix
+--                     , vertexMat :: !VertexSimMatrix
+--                     , restart   :: !WalkerRestart
+--                     }
 
 data WalkerChoice    = Same | DifferentLeft | DifferentRight
 data AlignmentMethod
     = CosineSimilarity
     | RandomWalker
-    | CSRW
     deriving (Eq,Read,Show)
+    -- | CSRW
 data EdgeMethod = ARACNE | SpearmanCorrelation | KendallCorrelation deriving (Eq,Read,Show)
 
 data DataEntry    = DataEntry { dataLevel     :: !T.Text

@@ -23,6 +23,7 @@ import Data.Bool
 import Data.List
 import qualified Data.Sequence as Seq
 import qualified Data.Map.Strict as Map
+import qualified Data.IntMap.Strict as IMap
 import qualified Data.Foldable as F
 import Control.Monad
 
@@ -106,14 +107,23 @@ getSimMatKendall entityDiff
         res <- uncurry getCorr x
         case res of
             Nothing     -> return acc
-            (Just res') -> return . N.accum acc (+) $ res'
-      begin      = return . N.ident . Map.size $ idMap
+            (Just ((!idx1, !idx2), !val)) ->
+                return
+                    . alterMap idx1 idx2 val
+                    . alterMap idx2 idx1 val
+                    $ acc
+      begin      = return IMap.empty
       extract    = return
+      alterMap new query val =
+            IMap.alter ( maybe (Just . IMap.singleton new $ val)
+                               (Just . IMap.insert new val)
+                       )
+                        query
       getCorr ((!id1, !idx1), !x) ((!id2, !idx2), !y) = do
           res <- bool (kendallCorrelate x y) (return $ Just maxEdge)
                . sameWithEntityDiff entityDiff id1
                $ id2
-          return . fmap (\x -> [((idx1, idx2), x), ((idx2, idx1), x)]) $ res
+          return . fmap (\ !x -> ((idx1, idx2), x)) $ res
       keyNotFound k = "ID: " ++ show k ++ " not found."
 
 -- | Complete R version.
@@ -133,7 +143,7 @@ getSimMatKendallR size level = do
                 df$r
             |]
 
-    res <- rToMatJSON size rMat
+    res <- rToMat size rMat
     return . EdgeSimMatrix $ res
 
 -- | Correlate two groups of entities, where each group is a collection of
@@ -174,5 +184,5 @@ getSimMatSpearmanR size level = do
                 df$r
             |]
 
-    res <- rToMatJSON size rMat
+    res <- rToMat size rMat
     return . EdgeSimMatrix $ res

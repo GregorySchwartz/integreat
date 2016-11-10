@@ -11,7 +11,7 @@ Collections the functions pertaining to the integration of levels of data.
 module Integrate
     ( integrateCosineSim
     , integrateWalker
-    , integrateCSRW
+    -- , integrateCSRW
     , getNodeCorrScoresInfo
     ) where
 
@@ -37,13 +37,14 @@ import Types
 import Utility
 import Alignment.Cosine
 import Alignment.RandomWalk
-import Alignment.CSRW
+-- import Alignment.CSRW
 
 -- | Do integration using cosine similarity.
-integrateCosineSim :: VertexSimMap
+integrateCosineSim :: Size
+                   -> VertexSimMap
                    -> EdgeSimMap
                    -> IO NodeCorrScoresMap
-integrateCosineSim vertexSimMap (EdgeSimMap edgeSimMap) =
+integrateCosineSim size vertexSimMap (EdgeSimMap edgeSimMap) =
     return
         . NodeCorrScoresMap
         . Map.fromList
@@ -52,7 +53,7 @@ integrateCosineSim vertexSimMap (EdgeSimMap edgeSimMap) =
   where
     compare !x !y =
         ( (x, y)
-        , cosineIntegrate vertexSimMap x y (lookupLevel x) (lookupLevel y)
+        , cosineIntegrate size vertexSimMap x y (lookupLevel x) (lookupLevel y)
         )
     levels        = Map.keys edgeSimMap
     lookupLevel l = lookupWithError
@@ -85,25 +86,25 @@ integrateWalker walkerRestart counterStop (GrMap grMap) =
                      . nodes
                      $ gr1
 
--- | Use integration using a random walker "CSRW".
-integrateCSRW
-    :: VertexSimMap
-    -> EdgeSimMap
-    -> WalkerRestart
-    -> Counter
-    -> IO NodeCorrScoresMap
-integrateCSRW vertexSimMap edgeSimMap restart counterStop =
-      fmap (NodeCorrScoresMap . Map.fromList) . pairsM eval $ levels
-  where
-    eval !l1 !l2   = fmap ((l1, l2),)
-                   . evalWalker vertexSimMap edgeSimMap restart counterStop l1
-                   $ l2
-    levels         = Map.keys . unEdgeSimMap $ edgeSimMap
-    lookupLevel l  = lookupWithError
-                        ("Level: " ++ (T.unpack $ unLevelName l) ++ " notFound")
-                        l
-                   . unEdgeSimMap
-                   $ edgeSimMap
+-- -- | Use integration using a random walker "CSRW".
+-- integrateCSRW
+--     :: VertexSimMap
+--     -> EdgeSimMap
+--     -> WalkerRestart
+--     -> Counter
+--     -> IO NodeCorrScoresMap
+-- integrateCSRW vertexSimMap edgeSimMap restart counterStop =
+--       fmap (NodeCorrScoresMap . Map.fromList) . pairsM eval $ levels
+--   where
+--     eval !l1 !l2   = fmap ((l1, l2),)
+--                    . evalWalker vertexSimMap edgeSimMap restart counterStop l1
+--                    $ l2
+--     levels         = Map.keys . unEdgeSimMap $ edgeSimMap
+--     lookupLevel l  = lookupWithError
+--                         ("Level: " ++ (T.unpack $ unLevelName l) ++ " notFound")
+--                         l
+--                    . unEdgeSimMap
+--                    $ edgeSimMap
 
 -- | Get the average node correspondence scores.
 getAvgNodeCorrScores :: [NodeCorrScores] -> FlatNodeCorrScores

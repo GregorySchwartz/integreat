@@ -13,6 +13,8 @@ module Alignment.Cosine
 
 -- Standard
 import Data.Tuple
+import Data.List
+import qualified Data.IntMap.Strict as IMap
 
 -- Cabal
 import qualified Data.Vector as V
@@ -26,30 +28,27 @@ import Utility
 
 -- | Get the cosine similarity of two levels. Normalize based on the size
 -- of actual data (no missing data) divided by the total amount of data.
-cosineIntegrate :: VertexSimMap
+cosineIntegrate :: Size
+                -> VertexSimMap
                 -> LevelName
                 -> LevelName
                 -> EdgeSimMatrix
                 -> EdgeSimMatrix
                 -> NodeCorrScores
-cosineIntegrate vMap l1 l2 e1 e2 =
+cosineIntegrate size vMap l1 l2 e1 e2 =
     NodeCorrScores
-        . VS.convert
-        . VS.map applyCosine
-        . VS.enumFromN 0
-        . rows
-        . unEdgeSimMatrix
-        $ e1
+        . V.fromList
+        . fmap snd
+        . IMap.toAscList
+        . fillIntMap size
+        . IMap.intersectionWith cosineSimIMap newE1
+        $ newE2
   where
-    applyCosine x = cosineSim (newE1 ! x) (newE2 ! x)
-    newE1         = unEdgeSimMatrix . cosineUpdateSimMat e1 $ changes
-    newE2         = unEdgeSimMatrix . cosineUpdateSimMat e2 $ changes
-    changes       = V.toList
-                  . V.imap (\i v -> ((i, i), v))
-                  . VS.convert
-                  . takeDiag
-                  . unVertexSimMatrix
-                  $ vertexSim
+    newE1 :: IMap.IntMap (IMap.IntMap Double)
+    newE1         =
+        unEdgeSimMatrix . cosineUpdateSimMat e1 . unVertexSimValues $ vertexSim
+    newE2         =
+        unEdgeSimMatrix . cosineUpdateSimMat e2 . unVertexSimValues $ vertexSim
     vertexSim     = getVertexSim l1 l2 vMap
 
 -- | Update the similarity matrices where the diagonal contains the similarity
@@ -57,5 +56,8 @@ cosineIntegrate vMap l1 l2 e1 e2 =
 cosineUpdateSimMat :: EdgeSimMatrix -> [((Int, Int), Double)] -> EdgeSimMatrix
 cosineUpdateSimMat (EdgeSimMatrix edgeSimMat) =
     EdgeSimMatrix
-        . accum edgeSimMat const
+        . foldl' (\acc ((!x, !y), !z) -> IMap.alter (f y z) x acc) edgeSimMat
         . (\xs -> xs ++ fmap (over _1 swap) xs)
+  where
+    f y z Nothing  = Just . IMap.singleton y $ z
+    f y z (Just v) = Just . IMap.insert y z $ v

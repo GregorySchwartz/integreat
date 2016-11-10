@@ -5,12 +5,13 @@ Collections all miscellaneous functions.
 -}
 
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Utility
     ( minMaxNorm
     , lookupWithError
-    , getNeighbors
+    -- , getNeighbors
     , largestLeftEig
     , (/.)
     , cosineSim
@@ -27,7 +28,9 @@ module Utility
     , listToTuple
     , sameWithEntityDiff
     , groupDataSets
+    , fillIntMap
     , standardLevelToRJSON
+    , rToMat
     , rToMatJSON
     , getAccuracy
     ) where
@@ -39,12 +42,14 @@ import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Strict as IMap
 import Data.Function (on)
+import Debug.Trace
 
 -- Cabal
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.Text as T
+import Data.ByteString.Lazy.Search (replace)
 import Data.Graph.Inductive
 import qualified Data.Aeson as JSON
 import Control.Lens
@@ -67,16 +72,16 @@ minMaxNorm xs = fmap (\x -> (x - minimum xs) / (maximum xs - minimum xs)) xs
 lookupWithError :: (Ord a) => String -> a -> Map.Map a b -> b
 lookupWithError err x = fromMaybe (error err) . Map.lookup x
 
--- | Get the neighbors of a vertex in the SimilarityMatrix.
-getNeighbors :: Int -> EdgeSimMatrix -> Set.Set Int
-getNeighbors idx = Set.fromList
-                 . V.toList
-                 . V.map fst
-                 . V.filter ((> 0) . snd)
-                 . V.imap (,)
-                 . VS.convert
-                 . flip (!) idx
-                 . unEdgeSimMatrix
+-- -- | Get the neighbors of a vertex in the SimilarityMatrix.
+-- getNeighbors :: Int -> EdgeSimMatrix -> Set.Set Int
+-- getNeighbors idx = Set.fromList
+--                  . V.toList
+--                  . V.map fst
+--                  . V.filter ((> 0) . snd)
+--                  . V.imap (,)
+--                  . VS.convert
+--                  . flip (!) idx
+--                  . unEdgeSimMatrix
 
 -- | Get the largest left eigenvector from an eig funciton call. The matrix, a
 -- transition probability matrix in this program, is assumed to be symmetrical
@@ -95,11 +100,11 @@ cosineSim :: Vector Double -> Vector Double -> Double
 cosineSim x y = dot x y / (norm_2 x * norm_2 y)
 
 -- | Cosine similarity of two IntMaps.
-cosineSimIMap :: IMap.IntMap Int -> IMap.IntMap Int -> Double
-cosineSimIMap x y = fromIntegral (imapSum $ IMap.intersectionWith (*) x y)
+cosineSimIMap :: IMap.IntMap Double -> IMap.IntMap Double -> Double
+cosineSimIMap x y = (imapSum $ IMap.intersectionWith (*) x y)
                   / (imapNorm x * imapNorm y)
   where
-    imapNorm = sqrt . fromIntegral . imapSum . IMap.map (^ 2)
+    imapNorm = sqrt . imapSum . IMap.map (^ 2)
     imapSum  = IMap.foldl' (+) 0
 
 -- | Remove indices matching a boolean function from both vectors but make
@@ -137,7 +142,7 @@ avgVecVec xs = fmap (/ genericLength xs)
 
 -- | Get the vertex similarity matrix for two levels, erroring out if the
 -- levels don't exist.
-getVertexSim :: LevelName -> LevelName -> VertexSimMap -> VertexSimMatrix
+getVertexSim :: LevelName -> LevelName -> VertexSimMap -> VertexSimValues
 getVertexSim l1 l2 (VertexSimMap vMap) =
     case Map.lookup l1 vMap of
         Nothing  -> fromMaybe (error $ levelErr l1)
@@ -192,6 +197,11 @@ groupDataSets Nothing _           = Nothing
 groupDataSets _ Nothing           = Nothing
 groupDataSets (Just !x) (Just !y) = Just (_entityValue x, _entityValue y)
 
+-- | Fill in an intmap with zeros for missing values.
+fillIntMap :: Size -> IMap.IntMap Double -> IMap.IntMap Double
+fillIntMap (Size size) m =
+    foldl' (\acc x -> IMap.alter (maybe (Just 0) Just) x acc) m [0..size - 1]
+
 -- | Rank the node correspondence scores.
 rankNodeCorrScores :: IDVec -> NodeCorrScores -> [(Double, ID)]
 rankNodeCorrScores (IDVec idVec) = zip [1..]
@@ -230,26 +240,33 @@ standardLevelToRJSON (StandardLevel level) = do
         as.data.frame(ls) |]
 
 -- | Convert an R matrix to a matrix.
-rToMat :: R.SomeSEXP s -> R.R s (Matrix Double)
-rToMat mat = do
+rToMat :: Size -> R.SomeSEXP s -> R.R s (IMap.IntMap (IMap.IntMap Double))
+rToMat (Size size) mat = do
     [r| library(reshape2) |]
     df <- [r| mat = as.matrix(mat_hs);
               mat[is.na(mat)] = 0;
-              df = as.data.frame(as.table(mat))
+              df = melt(mat);
+              df = df[df$value != 0,]
               df
           |]
 
-    var1 <- [r| df_hs$Var1 |]
-    var2 <- [r| df_hs$Var2 |]
-    val  <- [r| df_hs$Freq |]
+    var1 <- [r| as.numeric(gsub("V", "", gsub("X", "", df_hs$Var1))) |]
+    var2 <- [r| as.numeric(gsub("V", "", gsub("X", "", df_hs$Var2))) |]
+    val <-  [r| as.numeric(df_hs$value) |]
 
-    let v1 = R.fromSomeSEXP df :: [Double]
-        v2 = R.fromSomeSEXP df :: [Double]
-        v  = R.fromSomeSEXP df :: [Double]
-        edges = zipWith3 (\x y z -> ((truncate x - 1, truncate y - 1), z)) v1 v2 v
-        size  = truncate . sqrt . fromIntegral . length $ v1
+    let v1 = R.fromSomeSEXP var1 :: [Double]
+        v2 = R.fromSomeSEXP var2 :: [Double]
+        v  = R.fromSomeSEXP val :: [Double]
+        edges = zipWith3
+                    (\ x y z -> IMap.singleton
+                                    (truncate x)
+                                    (IMap.singleton (truncate y) z)
+                    )
+                    v1
+                    v2
+                    v
 
-    return . assoc (size, size) 0 $ edges
+    return . IMap.unionsWith IMap.union $ edges
 
 -- | Convert an R matrix to a matrix using JSON.
 rToMatJSON :: Size -> R.SomeSEXP s -> R.R s (Matrix Double)
@@ -258,21 +275,20 @@ rToMatJSON (Size size) mat = do
         write("Sending JSON matrix from R to Haskell.", stderr())
     |]
 
-    package <- [r| res = gsub("NA", "0", toJSON(as.data.frame(mat_hs)));
-                   res = gsub("X", "", res);
-                   res = gsub("\"_row\":\"", "\"_row\":", res);
-                   res = gsub("\"}", "}", res);
-                   res
-               |]
+    package <- [r| toJSON(as.data.frame(mat_hs)) |]
 
-    let lsls = JSON.decode (B.pack $ (R.fromSomeSEXP package :: String))
-            :: Maybe ([Map.Map String Double])
+    let replaceBadR = replace "\"}" ("}" :: B.ByteString)
+                    . replace "\"_row\":\"" ("\"_row\":" :: B.ByteString)
+                    . replace "X" ("" :: B.ByteString)
+                    . replace "NA" ("0" :: B.ByteString)
+        lsls        = JSON.eitherDecode (replaceBadR . B.pack $ (R.fromSomeSEXP package :: String))
+                   :: Either String ([Map.Map String Double])
         toUsable m = fmap (\(!row, (!col, !val)) -> ((truncate row, read col), val))
                    . zip (repeat (m Map.! "_row"))
                    . Map.toList
                    . Map.delete "_row"
                    $ m
-        newMat = concatMap toUsable .  fromMaybe (error "Bad JSON parsing from R") $ lsls
+        newMat = (\x -> traceShow ("toUsable end" ++ (show . length $ x)) x) . concatMap toUsable . (\x -> traceShow ("toUsable start" ++ (show $ length x)) x) . either error id $ lsls
 
     return . assoc (size, size) 0 $ newMat
 

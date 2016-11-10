@@ -26,6 +26,7 @@ import Data.List
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
+import qualified Data.IntMap.Strict as IMap
 import qualified Data.Foldable as F
 import Data.Function (on)
 
@@ -111,22 +112,23 @@ getIDMap = IDMap
          . unIDVec
          . getIDVec
 
--- | The default vertex similarity map using just a diagonal of 1 matrix
+-- | The default vertex similarity values using just a diagonal of 1 matrix
 -- (same entities are 1, different are 0).
-defVertexSimMap :: IDMap -> [LevelName] -> VertexSimMap
-defVertexSimMap (IDMap idMap) xs = VertexSimMap
-                                 . Map.fromListWith Map.union
-                                 . fmap ( \((!x, !y), !z)
-                                       -> (x, Map.singleton y z)
-                                        )
-                                 . flip zip (repeat defSimMat)
-                                 $ (,) <$> xs <*> xs
+defVertexSimMap :: Size -> [LevelName] -> VertexSimMap
+defVertexSimMap (Size size) xs = VertexSimMap
+                               . Map.fromListWith Map.union
+                               . fmap ( \((!x, !y), !z)
+                                     -> (x, Map.singleton y z)
+                                      )
+                               . flip zip (repeat defSimVals)
+                               $ (,) <$> xs <*> xs
   where
-    defSimMat = VertexSimMatrix
-              . diag
-              . flip VS.replicate (1 :: Double)
-              . Map.size
-              $ idMap
+    defSimVals = VertexSimValues
+               . zipWith3
+                    (\ !x !y !z -> ((x, y), z))
+                    [0..(size - 1)]
+                    [0..(size - 1)]
+               $ repeat (1 :: Double)
 
 -- | Convert a list of vertex entries to a vertex similarity map by joining
 -- together all like comparisons and converting to those values into
@@ -134,8 +136,7 @@ defVertexSimMap (IDMap idMap) xs = VertexSimMap
 vertexCsvToLevels :: IDMap -> [VertexEntry] -> VertexSimMap
 vertexCsvToLevels (IDMap idMap) =
     VertexSimMap
-        . (Map.map . Map.map) ( VertexSimMatrix
-                              . assoc (Map.size idMap, Map.size idMap) 0
+        . (Map.map . Map.map) ( VertexSimValues
                               . F.toList
                               )
         . Map.unionsWith (Map.unionWith (Seq.><))
@@ -205,8 +206,11 @@ getPremadeGr (IDMap idMap) =
 getPremadeEdgeSimMatrix :: IDMap -> [(String, String, Double)] -> EdgeSimMatrix
 getPremadeEdgeSimMatrix (IDMap idMap) =
     EdgeSimMatrix
-        . assoc (Map.size idMap, Map.size idMap) 0
-        . fmap (\(!x, !y, !z) -> ((read x, read y), z))
+        . IMap.unionsWith IMap.union
+        . fmap (\ (!x, !y, !z) -> IMap.singleton
+                                    (read x)
+                                    (IMap.singleton (read y) z)
+               )
 
 -- | Get the pre-made level networks for use with integration. We assume that
 -- the IDs are integers, starting at 0, with everything in order.
@@ -230,7 +234,8 @@ getPremadeNetworks (!changedVerticesString, !allNetworks) =
                  . fmap (getPremadeEdgeSimMatrix idMap)
                  . fmap snd
                  $ allNetworks
-    vertexSimMap = defVertexSimMap idMap levelNames
+    vertexSimMap =
+        defVertexSimMap (Size . Map.size . unIDMap $ idMap) levelNames
     levelNames   = fmap (LevelName . T.pack . show) [0..length allNetworks - 1]
     idMap        = getPremadeIDMap allVertices
     idVec        = getPremadeIDVec allVertices

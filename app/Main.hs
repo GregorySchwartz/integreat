@@ -44,7 +44,7 @@ import Utility
 import Load
 import Edge.Correlation
 import Edge.Aracne
-import Alignment.CSRW
+-- import Alignment.CSRW
 import Integrate
 import Print
 
@@ -56,7 +56,7 @@ data Options = Options { dataInput          :: Maybe String
                        , entityDiff         :: Maybe T.Text
                                         <?> "([Nothing] | STRING) When comparing entities that are the same, ignore the text after this separator. Used for comparing phosphorylated positions with another level. For example, if we have a strings ARG29 and ARG29_7 that we want to compare, we want to say that their value is the highest in correlation, so this string would be \"_\""
                        , alignmentMethod    :: Maybe String
-                                        <?> "([CosineSimilarity] | RandomWalker | CSRW) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
+                                        <?> "([CosineSimilarity] | RandomWalker) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
                        , edgeMethod         :: Maybe String
                                         <?> "([SpearmanCorrelation] | KendallCorrelation | ARACNE) The method to use for the edges between entities in the coexpression matrix."
                        , walkerRestart      :: Maybe Double
@@ -104,6 +104,7 @@ getIntegrationInput opts = do
         levelNames     = Set.toList . Set.fromList . fmap fst $ levels
         idMap          = getIDMap unifiedData
         idVec          = getIDVec unifiedData
+        size           = Size . Map.size . unIDMap $ idMap
         eDiff          = fmap EntityDiff . unHelpful . entityDiff $ opts
         vertexContents =
             fmap (fmap (processCsv . CSV.decodeByName) . CL.readFile)
@@ -124,7 +125,7 @@ getIntegrationInput opts = do
 
     vertexSimMap <- liftIO
                   . maybe
-                        (return . defVertexSimMap idMap $ levelNames)
+                        (return . defVertexSimMap size $ levelNames)
                         (fmap (vertexCsvToLevels idMap . V.toList))
                   $ vertexContents
 
@@ -132,9 +133,9 @@ getIntegrationInput opts = do
                       . unHelpful
                       . edgeMethod
                       $ opts
-        getSimMat ARACNE = getSimMatAracneR (Size . Map.size . unIDMap $ idMap)
-        getSimMat KendallCorrelation = getSimMatKendallR (Size . Map.size . unIDMap $ idMap)
-        getSimMat SpearmanCorrelation = getSimMatSpearmanR (Size . Map.size . unIDMap $ idMap)
+        getSimMat ARACNE = getSimMatAracneR size
+        getSimMat KendallCorrelation = getSimMatKendallR size
+        getSimMat SpearmanCorrelation = getSimMatSpearmanR size
         -- getSimMat KendallCorrelation = getSimMatKendall
         --                                 eDiff
         --                                 (MaximumEdge 1)
@@ -209,13 +210,14 @@ main = do
 
         let alignment =
                 maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts
+            size = Size . Map.size . unIDMap $ idMap
 
         liftIO $
             hPutStrLn stderr "Calculating vertex similarities between networks."
 
         nodeCorrScoresMap <- case alignment of
             CosineSimilarity -> liftIO
-                $ integrateCosineSim vertexSimMap edgeSimMap
+                $ integrateCosineSim size vertexSimMap edgeSimMap
             RandomWalker -> liftIO
                 $ integrateWalker
                     ( WalkerRestart
@@ -226,17 +228,17 @@ main = do
                     )
                     (Counter . fromMaybe 100 . unHelpful . steps $ opts)
                     grMap
-            CSRW -> liftIO
-                $ integrateCSRW
-                    vertexSimMap
-                    edgeSimMap
-                    ( WalkerRestart
-                    . fromMaybe 0.05
-                    . unHelpful
-                    . walkerRestart
-                    $ opts
-                    )
-                    (Counter . fromMaybe 100 . unHelpful . steps $ opts)
+            -- CSRW -> liftIO
+            --     $ integrateCSRW
+            --         vertexSimMap
+            --         edgeSimMap
+            --         ( WalkerRestart
+            --         . fromMaybe 0.05
+            --         . unHelpful
+            --         . walkerRestart
+            --         $ opts
+            --         )
+            --         (Counter . fromMaybe 100 . unHelpful . steps $ opts)
 
         liftIO $ hPutStrLn stderr "Calculating node correspondence scores."
 

@@ -1,5 +1,5 @@
 name:                integrate
-version:             0.1.1.0
+version:             0.1.1.1
 synopsis:            Insert synopsis here
 description:         Please see README.md
 homepage:            http://github.com/GregorySchwartz/integrate#readme
@@ -22,7 +22,7 @@ library
                      , Edge.Aracne
                      , Alignment.Cosine
                      , Alignment.RandomWalk
-                     , Alignment.CSRW
+                     -- , Alignment.CSRW
                      , Integrate
                      , Print
   build-depends:       base >= 4.7 && < 5
@@ -39,6 +39,7 @@ library
                      , bytestring
                      , text
                      , text-show
+                     , stringsearch
                      , cassava
                      , fgl
                      , foldl

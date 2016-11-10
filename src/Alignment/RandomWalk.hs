@@ -124,7 +124,11 @@ randomWalkerScore :: WalkerRestart
                   -> Int
                   -> IO Double
 randomWalkerScore walkerRestart counterStop gr1 gr2 v = do
-    gr1Dist <- evalWalker walkerRestart counterStop gr1 v
-    gr2Dist <- evalWalker walkerRestart counterStop gr2 v
+    gr1Dist <- fmap (IMap.map fromIntegral)
+             . evalWalker walkerRestart counterStop gr1
+             $ v
+    gr2Dist <- fmap (IMap.map fromIntegral)
+             . evalWalker walkerRestart counterStop gr2
+             $ v
 
     return . cosineSimIMap gr1Dist $ gr2Dist
