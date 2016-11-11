@@ -237,7 +237,10 @@ standardLevelToRJSON (StandardLevel level) = do
         write("Sending JSON matrix to R.", stderr());
         ls = fromJSON(cargo_hs);
         ls = ls[mixedsort(names(ls))];
-        as.data.frame(ls) |]
+        df = as.data.frame(ls);
+        df[is.na(df)] = 0;
+        df
+    |]
 
 -- | Convert an R matrix to a matrix.
 rToMat :: Size -> R.SomeSEXP s -> R.R s (IMap.IntMap (IMap.IntMap Double))
