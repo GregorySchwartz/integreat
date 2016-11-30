@@ -5,6 +5,7 @@ Collections all miscellaneous functions.
 -}
 
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
@@ -14,8 +15,6 @@ module Utility
     -- , getNeighbors
     , largestLeftEig
     , (/.)
-    , cosineSim
-    , cosineSimIMap
     , removeMatchFilter
     , applyRows
     , avgVec
@@ -94,18 +93,6 @@ largestLeftEig (!eigVal, !eigVec) =
 -- | A more generic division.
 (/.) :: (Real a, Fractional c) => a -> a -> c
 (/.) x y = fromRational $ toRational x / toRational y
-
--- | Cosine similarity.
-cosineSim :: Vector Double -> Vector Double -> Double
-cosineSim x y = dot x y / (norm_2 x * norm_2 y)
-
--- | Cosine similarity of two IntMaps.
-cosineSimIMap :: IMap.IntMap Double -> IMap.IntMap Double -> Double
-cosineSimIMap x y = (imapSum $ IMap.intersectionWith (*) x y)
-                  / (imapNorm x * imapNorm y)
-  where
-    imapNorm = sqrt . imapSum . IMap.map (^ 2)
-    imapSum  = IMap.foldl' (+) 0
 
 -- | Remove indices matching a boolean function from both vectors but make
 -- sure that the indices match. NOT NEEDED WITH COSINE.
@@ -198,9 +185,14 @@ groupDataSets _ Nothing           = Nothing
 groupDataSets (Just !x) (Just !y) = Just (_entityValue x, _entityValue y)
 
 -- | Fill in an intmap with zeros for missing values.
-fillIntMap :: Size -> IMap.IntMap Double -> IMap.IntMap Double
+fillIntMap :: Size
+           -> IMap.IntMap (IO (Double, Maybe PValue))
+           -> IMap.IntMap (IO (Double, Maybe PValue))
 fillIntMap (Size size) m =
-    foldl' (\acc x -> IMap.alter (maybe (Just 0) Just) x acc) m [0..size - 1]
+    foldl'
+        (\acc x -> IMap.alter (maybe (Just $ return (0, Nothing)) Just) x acc)
+        m
+        [0..size - 1]
 
 -- | Rank the node correspondence scores.
 rankNodeCorrScores :: IDVec -> NodeCorrScores -> [(Double, ID)]
@@ -210,6 +202,7 @@ rankNodeCorrScores (IDVec idVec) = zip [1..]
                                  . V.toList
                                  . V.imap (\ !i !v -> (idVec V.! i, v))
                                  . VS.convert
+                                 . fmap fst
                                  . unNodeCorrScores
 
 -- -- | Convert a standard level to an R data frame.
@@ -313,6 +306,7 @@ getAccuracy truth (IDVec idVec) = (1 -)
                                 . filter (flip Set.member truth . snd)
                                 . rankNodeCorrScores (IDVec idVec)
                                 . NodeCorrScores
+                                . fmap (, Nothing)
                                 . unFlatNodeCorrScores
                                 . avgNodeCorrScores
   where

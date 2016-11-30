@@ -71,6 +71,8 @@ data Options = Options { dataInput          :: Maybe String
                                         <?> "([Nothing] | INT) The minimum number of samples an entity must appear in, otherwise the entity is removed from the analysis."
                        , entityFilterStdDev :: Maybe Double
                                         <?> "([Nothing] | DOUBLE) Remove entities that have less than this value for their standard deviation among all samples."
+                       , permutations       :: Maybe Int
+                                        <?> "([1000] | INT) The number of permutations for cosine similarity permutation test."
                        }
                deriving (Generic)
 
@@ -210,14 +212,16 @@ main = do
 
         let alignment =
                 maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts
-            size = Size . Map.size . unIDMap $ idMap
+            size      = Size . Map.size . unIDMap $ idMap
+            nPerm     =
+                Permutations . fromMaybe 1000 . unHelpful . permutations $ opts
 
         liftIO $
             hPutStrLn stderr "Calculating vertex similarities between networks."
 
         nodeCorrScoresMap <- case alignment of
             CosineSimilarity -> liftIO
-                $ integrateCosineSim size vertexSimMap edgeSimMap
+                $ integrateCosineSim nPerm size vertexSimMap edgeSimMap
             RandomWalker -> liftIO
                 $ integrateWalker
                     ( WalkerRestart

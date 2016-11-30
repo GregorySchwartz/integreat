@@ -180,7 +180,6 @@ getSimMatAracneR size level = do
     [r| suppressPackageStartupMessages(library("minet")) |]
     rMat <- [r| df = rDF_hs;
                 write("Starting minet.", stderr());
-                print(df);
                 df = minet(df, method = "aracne", estimator = "mi.shrink", disc = "equalfreq");
                 write("Finished minet.", stderr());
                 df[is.na(df)] = 0;

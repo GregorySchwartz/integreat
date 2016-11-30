@@ -44,6 +44,8 @@ newtype Counter          = Counter Int deriving (Eq, Ord, Num)
 newtype NumSamples       = NumSamples { unNumSamples :: Int }
 newtype WalkerRestart    = WalkerRestart { unWalkerRestart :: Double }
 newtype DataSetName      = DataSetName T.Text deriving (Eq, Ord, Show)
+newtype PValue           = PValue { unPValue :: Double } deriving (Eq, Ord, Show)
+newtype Permutations     = Permutations Int
 newtype LevelName        = LevelName { unLevelName :: T.Text }
                            deriving (Eq, Ord, Show)
 newtype IDVec            = IDVec { unIDVec :: V.Vector ID }
@@ -78,7 +80,7 @@ newtype TransProbMatrix  =
     TransProbMatrix { unTransProbMatrix :: Matrix Double }
 newtype LevelGr = LevelGr { unLevelGr :: Gr Int Double } deriving (Show)
 newtype NodeCorrScores   =
-    NodeCorrScores { unNodeCorrScores :: V.Vector Double }
+    NodeCorrScores { unNodeCorrScores :: V.Vector (Double, Maybe PValue) }
 newtype FlatNodeCorrScores =
     FlatNodeCorrScores { unFlatNodeCorrScores :: V.Vector Double }
 newtype PValNodeCorrScores =
@@ -171,6 +173,7 @@ instance DefaultOrdered VertexEntry
 data NodeCorrScoresInfo = NodeCorrScoresInfo
     { nodeCorrScoresMap          :: NodeCorrScoresMap
     , avgNodeCorrScores          :: FlatNodeCorrScores
+    , avgPValNodeCorrScores      :: PValNodeCorrScores
     , rankProdNodeCorrScores     :: FlatNodeCorrScores
     , rankProdPValNodeCorrScores :: PValNodeCorrScores
     }

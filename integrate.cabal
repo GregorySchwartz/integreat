@@ -1,6 +1,6 @@
 name:                integrate
-version:             0.1.1.1
-synopsis:            Insert synopsis here
+version:             0.2.0.0
+synopsis:            Integrate different assays.
 description:         Please see README.md
 homepage:            http://github.com/GregorySchwartz/integrate#readme
 license:             GPL-3

@@ -31,6 +31,7 @@ import Control.Lens
 -- Local
 import Types
 import Utility
+import Alignment.Cosine
 
 -- | Update the current position of the walker and the distribution.
 updateWalker :: Int -> Walker ()

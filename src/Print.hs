@@ -36,7 +36,9 @@ printNodeCorrScores (IDVec idVec) unified info =
     T.append (header <> "\n")
         . T.unlines
         . foldl'
-            (\acc -> zipWith (\x y -> x <> "," <> showt y) acc . V.toList)
+            (\ acc -> zipWith (\x y -> x <> "," <> showt y) acc
+                    . V.toList
+            )
             vertexCols
         $ cols
   where
@@ -48,7 +50,7 @@ printNodeCorrScores (IDVec idVec) unified info =
              . nodeCorrScoresMap
              $ info
              )
-          <> ["average", "rankProd", "pValRankProd"]
+          <> ["average", "pValAvg", "rankProd", "pValRankProd"]
     vertexCols  = fmap vertexCol [0..(V.length idVec - 1)]
     vertexCol x = T.intercalate "," [ unID . (V.!) idVec $ x
                                     , maybe "0" (T.pack . show . Map.size)
@@ -57,13 +59,14 @@ printNodeCorrScores (IDVec idVec) unified info =
                                             )
                                     $ unified
                                     ]
-    cols        = ( fmap (unNodeCorrScores . snd)
+    cols        = ( fmap (fmap fst . unNodeCorrScores . snd)
                   . Map.toAscList
                   . unNodeCorrScoresMap
                   . nodeCorrScoresMap
                   $ info
                   )
                <> [ unFlatNodeCorrScores . avgNodeCorrScores $ info
+                  , unPValNodeCorrScores . avgPValNodeCorrScores $ info
                   , unFlatNodeCorrScores . rankProdNodeCorrScores $ info
                   , unPValNodeCorrScores . rankProdPValNodeCorrScores $ info
                   ]
