@@ -85,13 +85,24 @@ cosinePerm :: Permutations
            -> IMap.IntMap Double
            -> IO (Double, Maybe PValue)
 cosinePerm (Permutations nPerm) xs ys = do
-    let obs = cosineSimIMap xs ys
+    let obs     = cosineSimIMap xs ys
+        expTest = (>= abs obs) . abs
 
-    vals <- mapM (const (shuffleCosine xs ys)) . V.replicate nPerm $ 0
+    -- Lotsa space version.
+    -- vals <- mapM (const (shuffleCosine xs ys)) . V.replicate nPerm $ 0
+    -- let exps = V.filter (\x -> abs x >= abs obs) vals
 
-    let exps = V.filter (\x -> abs x >= abs obs) vals
-        pVal = PValue
-             $ (fromIntegral $ V.length exps) / (fromIntegral $ V.length vals)
+    let successes :: Int -> Int -> IO Int
+        successes !acc 0  = return acc
+        successes !acc !n = do
+            res <- shuffleCosine xs $ ys
+            if expTest res
+                then successes (acc + 1) (n - 1)
+                else successes acc (n - 1)
+
+    exp <- successes 0 nPerm
+
+    let pVal = PValue $ (fromIntegral exp) / (fromIntegral nPerm)
 
     return (obs, Just pVal)
 
