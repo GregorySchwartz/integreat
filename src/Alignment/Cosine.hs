@@ -11,12 +11,14 @@ module Alignment.Cosine
     ( cosineIntegrate
     , cosineSim
     , cosineSimIMap
+    , cosinePerm
     ) where
 
 -- Standard
 import Data.Tuple
 import Data.List
 import qualified Data.IntMap.Strict as IMap
+import Control.Monad
 
 -- Cabal
 import qualified Data.Vector as V
@@ -45,12 +47,15 @@ cosineIntegrate nPerm size vMap l1 l2 e1 e2 =
         . fmap snd
         . IMap.toAscList
         . fillIntMap size
-        . IMap.intersectionWith (cosinePerm nPerm) newE1
+        . IMap.intersectionWith (cosinePerm nPerm edgeVals) newE1
         $ newE2
   where
+    edgeVals :: EdgeValues
+    edgeVals = EdgeValues . concatMap IMap.elems . IMap.elems $ newE2
     newE1 :: IMap.IntMap (IMap.IntMap Double)
     newE1         =
         unEdgeSimMatrix . cosineUpdateSimMat e1 . unVertexSimValues $ vertexSim
+    newE2 :: IMap.IntMap (IMap.IntMap Double)
     newE2         =
         unEdgeSimMatrix . cosineUpdateSimMat e2 . unVertexSimValues $ vertexSim
     vertexSim     = getVertexSim l1 l2 vMap
@@ -81,10 +86,11 @@ cosineSimIMap x y = (imapSum $ IMap.intersectionWith (*) x y)
 -- | Get the cosine similarity and the p value of that similarity through the
 -- permutation test.
 cosinePerm :: Permutations
+           -> EdgeValues
            -> IMap.IntMap Double
            -> IMap.IntMap Double
            -> IO (Double, Maybe PValue)
-cosinePerm (Permutations nPerm) xs ys = do
+cosinePerm (Permutations nPerm) edgeVals xs ys = do
     let obs     = cosineSimIMap xs ys
         expTest = (>= abs obs) . abs
 
@@ -95,7 +101,7 @@ cosinePerm (Permutations nPerm) xs ys = do
     let successes :: Int -> Int -> IO Int
         successes !acc 0  = return acc
         successes !acc !n = do
-            res <- shuffleCosine xs $ ys
+            res <- randomCosine edgeVals xs $ ys
             if expTest res
                 then successes (acc + 1) (n - 1)
                 else successes acc (n - 1)
@@ -106,6 +112,25 @@ cosinePerm (Permutations nPerm) xs ys = do
 
     return (obs, Just pVal)
 
+-- | Random sample cosine.
+randomCosine :: EdgeValues
+             -> IMap.IntMap Double
+             -> IMap.IntMap Double
+             -> IO Double
+randomCosine (EdgeValues edgeVals) xs ys = do
+    shuffledYS <- getSampleMap edgeVals ys
+
+    return . cosineSimIMap xs $ shuffledYS
+
+-- | Sample map values from the complete set of values.
+getSampleMap :: [a] -> IMap.IntMap a -> IO (IMap.IntMap a)
+getSampleMap vals m = do
+    let keys = IMap.keys m
+
+    newElems <- sample . replicateM (IMap.size m) . randomElement $ vals
+
+    return . IMap.fromList . zip keys $ newElems
+    
 -- | Random shuffle cosine.
 shuffleCosine :: IMap.IntMap Double
               -> IMap.IntMap Double

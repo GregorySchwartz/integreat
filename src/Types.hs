@@ -46,6 +46,7 @@ newtype WalkerRestart    = WalkerRestart { unWalkerRestart :: Double }
 newtype DataSetName      = DataSetName T.Text deriving (Eq, Ord, Show)
 newtype PValue           = PValue { unPValue :: Double } deriving (Eq, Ord, Show)
 newtype Permutations     = Permutations Int
+newtype EdgeValues       = EdgeValues [Double]
 newtype LevelName        = LevelName { unLevelName :: T.Text }
                            deriving (Eq, Ord, Show)
 newtype IDVec            = IDVec { unIDVec :: V.Vector ID }
