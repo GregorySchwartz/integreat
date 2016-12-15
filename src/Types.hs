@@ -33,6 +33,7 @@ import Numeric.LinearAlgebra
 
 
 -- Algebraic
+newtype Threads          = Threads Int
 newtype ID               = ID { unID :: T.Text } deriving (Eq, Ord, Show)
 newtype Default          = Default { unDefault :: Double }
 newtype Bandwidth        = Bandwidth { unBandwidth :: Double }

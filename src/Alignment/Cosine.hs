@@ -130,7 +130,7 @@ getSampleMap vals m = do
     newElems <- sample . replicateM (IMap.size m) . randomElement $ vals
 
     return . IMap.fromList . zip keys $ newElems
-    
+
 -- | Random shuffle cosine.
 shuffleCosine :: IMap.IntMap Double
               -> IMap.IntMap Double

@@ -22,6 +22,7 @@ module Utility
     , getVertexSim
     , pairs
     , pairsM
+    , parPairsM
     , triples
     , flipToo
     , listToTuple
@@ -41,7 +42,7 @@ import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Strict as IMap
 import Data.Function (on)
-import Debug.Trace
+import Control.Concurrent.Async.Pool
 
 -- Cabal
 import qualified Data.Vector as V
@@ -154,6 +155,20 @@ pairs f l = [f x y | (x:ys) <- tails l, y <- ys]
 -- monad.
 pairsM :: (Monad m) => (a -> a -> m b) -> [a] -> m [b]
 pairsM f l = sequence [f x y | (x:ys) <- tails l, y <- ys]
+
+-- | Extract the unique pairings of a list and apply a function to them within a
+-- monad. Parallel version.
+parPairsM :: Threads -> (a -> a -> IO b) -> [a] -> IO [b]
+parPairsM _ _ []          = return []
+parPairsM (Threads n) f l =
+    withTaskGroup n $ \g -> mapTasks g . concatMap go . tails $ l
+  where
+    go [] = []
+    go [_] = []
+    go (x:ys) = fmap (evalM x) $ ys
+    evalM !x !y = do
+        !res <- f x y
+        return res
 
 -- | Extract the unique triplets of a list and apply a function to them.
 triples :: (a -> a -> a -> b) -> [a] -> [b]
@@ -284,7 +299,7 @@ rToMatJSON (Size size) mat = do
                    . Map.toList
                    . Map.delete "_row"
                    $ m
-        newMat = (\x -> traceShow ("toUsable end" ++ (show . length $ x)) x) . concatMap toUsable . (\x -> traceShow ("toUsable start" ++ (show $ length x)) x) . either error id $ lsls
+        newMat = concatMap toUsable . either error id $ lsls
 
     return . assoc (size, size) 0 $ newMat
 

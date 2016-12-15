@@ -41,13 +41,14 @@ import Alignment.RandomWalk
 -- import Alignment.CSRW
 
 -- | Do integration using cosine similarity.
-integrateCosineSim :: Permutations
+integrateCosineSim :: Threads
+                   -> Permutations
                    -> Size
                    -> VertexSimMap
                    -> EdgeSimMap
                    -> IO NodeCorrScoresMap
-integrateCosineSim nPerm size vertexSimMap (EdgeSimMap edgeSimMap) =
-    fmap (NodeCorrScoresMap . Map.fromList) . pairsM compare $ levels
+integrateCosineSim threads nPerm size vertexSimMap (EdgeSimMap edgeSimMap) =
+    fmap (NodeCorrScoresMap . Map.fromList) . parPairsM threads compare $ levels
   where
     compare !x !y = do
         res <- cosineIntegrate
