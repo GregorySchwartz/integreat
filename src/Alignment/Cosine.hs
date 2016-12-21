@@ -24,6 +24,7 @@ import Control.Monad
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import Data.Random
+import Control.Concurrent.Async
 import Control.Lens
 import Numeric.LinearAlgebra
 
@@ -41,17 +42,18 @@ cosineIntegrate :: Permutations
                 -> EdgeSimMatrix
                 -> IO NodeCorrScores
 cosineIntegrate nPerm size vMap l1 l2 e1 e2 =
-    fmap NodeCorrScores
-        . sequence
-        . V.fromList
-        . fmap snd
-        . IMap.toAscList
-        . fillIntMap size
-        . IMap.intersectionWith (cosinePerm nPerm edgeVals) newE1
+    fmap ( NodeCorrScores
+         . V.fromList
+         . fmap snd
+         . IMap.toAscList
+         . fillIntMap size
+         )
+        . mapConcurrently (uncurry (cosinePerm nPerm edgeVals))
+        . IMap.intersectionWith (,) newE1
         $ newE2
   where
     edgeVals :: EdgeValues
-    edgeVals = EdgeValues . concatMap IMap.elems . IMap.elems $ newE2
+    edgeVals = EdgeValues . VS.fromList . concatMap IMap.elems . IMap.elems $ newE2
     newE1 :: IMap.IntMap (IMap.IntMap Double)
     newE1         =
         unEdgeSimMatrix . cosineUpdateSimMat e1 . unVertexSimValues $ vertexSim
@@ -123,13 +125,18 @@ randomCosine (EdgeValues edgeVals) xs ys = do
     return . cosineSimIMap xs $ shuffledYS
 
 -- | Sample map values from the complete set of values.
-getSampleMap :: [a] -> IMap.IntMap a -> IO (IMap.IntMap a)
+getSampleMap
+    :: (VS.Storable a)
+    => VS.Vector a
+    -> IMap.IntMap a
+    -> IO (IMap.IntMap a)
 getSampleMap vals m = do
     let keys = IMap.keys m
+        len = VS.length vals - 1
 
-    newElems <- sample . replicateM (IMap.size m) . randomElement $ vals
+    newIdxs <- sample . replicateM (IMap.size m) . uniform 0 $ len
 
-    return . IMap.fromList . zip keys $ newElems
+    return . IMap.fromList . zip keys . fmap (vals VS.!) $ newIdxs
 
 -- | Random shuffle cosine.
 shuffleCosine :: IMap.IntMap Double

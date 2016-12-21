@@ -73,8 +73,6 @@ data Options = Options { dataInput          :: Maybe String
                                            <?> "([Nothing] | DOUBLE) Remove entities that have less than this value for their standard deviation among all samples."
                        , permutations       :: Maybe Int
                                            <?> "([1000] | INT) The number of permutations for cosine similarity permutation test."
-                       , threads            :: Maybe Int
-                                          <?> "([1] | INT) The number of threads to use."
                        }
                deriving (Generic)
 
@@ -212,8 +210,7 @@ main = do
                 . premade
                 $ opts
 
-        let nThreads  = Threads . fromMaybe 1 . unHelpful . threads $ opts
-            alignment =
+        let alignment =
                 maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts
             size      = Size . Map.size . unIDMap $ idMap
             nPerm     =
@@ -224,7 +221,7 @@ main = do
 
         nodeCorrScoresMap <- case alignment of
             CosineSimilarity -> liftIO
-                $ integrateCosineSim nThreads nPerm size vertexSimMap edgeSimMap
+                $ integrateCosineSim nPerm size vertexSimMap edgeSimMap
             RandomWalker -> liftIO
                 $ integrateWalker
                     ( WalkerRestart

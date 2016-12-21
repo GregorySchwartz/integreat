@@ -42,7 +42,7 @@ import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import qualified Data.IntMap.Strict as IMap
 import Data.Function (on)
-import Control.Concurrent.Async.Pool
+import Control.Concurrent.Async
 
 -- Cabal
 import qualified Data.Vector as V
@@ -158,14 +158,13 @@ pairsM f l = sequence [f x y | (x:ys) <- tails l, y <- ys]
 
 -- | Extract the unique pairings of a list and apply a function to them within a
 -- monad. Parallel version.
-parPairsM :: Threads -> (a -> a -> IO b) -> [a] -> IO [b]
-parPairsM _ _ []          = return []
-parPairsM (Threads n) f l =
-    withTaskGroup n $ \g -> mapTasks g . concatMap go . tails $ l
+parPairsM :: (a -> a -> IO b) -> [a] -> IO [b]
+parPairsM _ [] = return []
+parPairsM f l  = mapConcurrently (uncurry evalM) . concatMap go . tails $ l
   where
     go [] = []
     go [_] = []
-    go (x:ys) = fmap (evalM x) $ ys
+    go (x:ys) = fmap (x,) ys
     evalM !x !y = do
         !res <- f x y
         return res
@@ -201,11 +200,11 @@ groupDataSets (Just !x) (Just !y) = Just (_entityValue x, _entityValue y)
 
 -- | Fill in an intmap with zeros for missing values.
 fillIntMap :: Size
-           -> IMap.IntMap (IO (Double, Maybe PValue))
-           -> IMap.IntMap (IO (Double, Maybe PValue))
+           -> IMap.IntMap (Double, Maybe PValue)
+           -> IMap.IntMap (Double, Maybe PValue)
 fillIntMap (Size size) m =
     foldl'
-        (\acc x -> IMap.alter (maybe (Just $ return (0, Nothing)) Just) x acc)
+        (\acc x -> IMap.alter (maybe (Just (0, Nothing)) Just) x acc)
         m
         [0..size - 1]
 
