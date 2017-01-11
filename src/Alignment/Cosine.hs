@@ -21,8 +21,9 @@ import qualified Data.IntMap.Strict as IMap
 import Control.Monad
 
 -- Cabal
-import qualified Data.Vector as V
-import qualified Data.Vector.Storable as VS
+import qualified Data.Vector as VB
+import qualified Data.Vector.Unboxed as VU
+import qualified Data.Vector.Generic as V
 import Data.Random
 import Control.Concurrent.Async
 import Control.Lens
@@ -43,17 +44,17 @@ cosineIntegrate :: Permutations
                 -> IO NodeCorrScores
 cosineIntegrate nPerm size vMap l1 l2 e1 e2 =
     fmap ( NodeCorrScores
-         . V.fromList
+         . VB.fromList
          . fmap snd
          . IMap.toAscList
          . fillIntMap size
          )
-        . mapConcurrently (uncurry (cosinePerm nPerm edgeVals))
+        . mapConcurrently (uncurry (cosinePerm nPerm))
         . IMap.intersectionWith (,) newE1
         $ newE2
   where
-    edgeVals :: EdgeValues
-    edgeVals = EdgeValues . VS.fromList . concatMap IMap.elems . IMap.elems $ newE2
+    -- edgeVals :: EdgeValues
+    -- edgeVals = EdgeValues . VU.fromList . concatMap IMap.elems . IMap.elems $ newE2
     newE1 :: IMap.IntMap (IMap.IntMap Double)
     newE1         =
         unEdgeSimMatrix . cosineUpdateSimMat e1 . unVertexSimValues $ vertexSim
@@ -86,13 +87,38 @@ cosineSimIMap x y = (imapSum $ IMap.intersectionWith (*) x y)
     imapSum  = IMap.foldl' (+) 0
 
 -- | Get the cosine similarity and the p value of that similarity through the
--- permutation test.
+-- permutation test by shuffling non-zero edges of the second vertex.
 cosinePerm :: Permutations
-           -> EdgeValues
            -> IMap.IntMap Double
            -> IMap.IntMap Double
            -> IO (Double, Maybe PValue)
-cosinePerm (Permutations nPerm) edgeVals xs ys = do
+cosinePerm (Permutations nPerm) xs ys = do
+    let obs     = cosineSimIMap xs ys
+        expTest = (>= abs obs) . abs
+
+    let successes :: Int -> Int -> IO Int
+        successes !acc 0  = return acc
+        successes !acc !n = do
+            res <-  shuffleCosine xs $ ys
+            if expTest res
+                then successes (acc + 1) (n - 1)
+                else successes acc (n - 1)
+
+    exp <- successes 0 nPerm
+
+    let pVal = PValue $ (fromIntegral exp) / (fromIntegral nPerm)
+
+    return (obs, Just pVal)
+
+-- | Get the cosine similarity and the p value of that similarity through the
+-- permutation test, using the edge distribution from the second network.
+cosinePermFromDist
+    :: Permutations
+    -> EdgeValues
+    -> IMap.IntMap Double
+    -> IMap.IntMap Double
+    -> IO (Double, Maybe PValue)
+cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
     let obs     = cosineSimIMap xs ys
         expTest = (>= abs obs) . abs
 
@@ -125,28 +151,23 @@ randomCosine (EdgeValues edgeVals) xs ys = do
     return . cosineSimIMap xs $ shuffledYS
 
 -- | Sample map values from the complete set of values.
-getSampleMap
-    :: (VS.Storable a)
-    => VS.Vector a
-    -> IMap.IntMap a
-    -> IO (IMap.IntMap a)
+getSampleMap :: (V.Vector v a) => v a -> IMap.IntMap a -> IO (IMap.IntMap a)
 getSampleMap vals m = do
     let keys = IMap.keys m
-        len = VS.length vals - 1
+        len = V.length vals - 1
 
     newIdxs <- sample . replicateM (IMap.size m) . uniform 0 $ len
 
-    return . IMap.fromList . zip keys . fmap (vals VS.!) $ newIdxs
+    return . IMap.fromList . zip keys . fmap (vals V.!) $ newIdxs
 
 -- | Random shuffle cosine.
 shuffleCosine :: IMap.IntMap Double
               -> IMap.IntMap Double
               -> IO Double
 shuffleCosine xs ys = do
-    shuffledXS <- shuffleMap xs
     shuffledYS <- shuffleMap ys
 
-    return . cosineSimIMap shuffledXS $ shuffledYS
+    return . cosineSimIMap xs $ shuffledYS
 
 -- | Shuffle map keys.
 shuffleMap :: IMap.IntMap a -> IO (IMap.IntMap a)

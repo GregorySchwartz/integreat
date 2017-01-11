@@ -249,7 +249,8 @@ standardLevelToRJSON (StandardLevel level) = do
         df
     |]
 
--- | Convert an R matrix to a matrix.
+-- | Convert an R matrix to a matrix. Remove non-zero values when putting into a
+-- map.
 rToMat :: Size -> R.SomeSEXP s -> R.R s (IMap.IntMap (IMap.IntMap Double))
 rToMat (Size size) mat = do
     [r| library(reshape2) |]

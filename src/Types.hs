@@ -21,6 +21,7 @@ import GHC.Generics
 -- Cabal
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
+import qualified Data.Vector.Unboxed as VU
 import qualified Data.Text as T
 import Data.Csv
 import Data.Graph.Inductive
@@ -47,7 +48,7 @@ newtype WalkerRestart    = WalkerRestart { unWalkerRestart :: Double }
 newtype DataSetName      = DataSetName T.Text deriving (Eq, Ord, Show)
 newtype PValue           = PValue { unPValue :: Double } deriving (Eq, Ord, Show)
 newtype Permutations     = Permutations Int
-newtype EdgeValues       = EdgeValues (VS.Vector Double)
+newtype EdgeValues       = EdgeValues (VU.Vector Double)
 newtype LevelName        = LevelName { unLevelName :: T.Text }
                            deriving (Eq, Ord, Show)
 newtype IDVec            = IDVec { unIDVec :: V.Vector ID }
