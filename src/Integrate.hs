@@ -16,17 +16,19 @@ module Integrate
     ) where
 
 -- Standard
+import Data.List
 import Data.Maybe
-import qualified Data.Set as Set
+import Data.Monoid
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 
 -- Cabal
+import qualified Data.Aeson as A
+import qualified Data.ByteString.Lazy.Char8 as B
+import Data.Graph.Inductive
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
-import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.Text as T
-import qualified Data.Aeson as A
-import Data.Graph.Inductive
 
 import qualified Foreign.R as R
 import Language.R.Instance as R
@@ -139,31 +141,48 @@ getRankProdNodeCorrScores xs = do
         )
 
 -- | Get all information from the node correspondence scores.
-getNodeCorrScoresInfo :: NodeCorrScoresMap -> R s NodeCorrScoresInfo
+getNodeCorrScoresInfo :: NodeCorrScoresMap
+                      -> R s (V.Vector NodeCorrScoresInfo)
 getNodeCorrScoresInfo scoreMap = do
-    let avgScores =
-            getAvgNodeCorrScores
-                . Map.elems
-                . unNodeCorrScoresMap
-                $ scoreMap
-        avgPVals =
-            PValNodeCorrScores
-                . avgVecVec
-                . fmap ( fmap (fromMaybe 1 . fmap unPValue . snd)
-                       . unNodeCorrScores
-                       )
-                . Map.elems
-                . unNodeCorrScoresMap
-                $ scoreMap
+    let scores = Map.toAscList . unNodeCorrScoresMap $ scoreMap
+        avgScores = getAvgNodeCorrScores . fmap snd $ scores
+        -- avgStatistic =
+        --     StatisticNodeCorrScores
+        --         . avgVecVec
+        --         . fmap ( fmap (fromMaybe 0 . fmap unPValue . snd)
+        --                . unNodeCorrScores
+        --                )
+        --         . fmap snd
+        --         $ scores
+        avgStatistic :: StatisticNodeCorrScores
+        avgStatistic =
+            StatisticNodeCorrScores
+                . fmap snd
+                . unNodeCorrScores
+                . snd
+                . head
+                $ scores
+        nodeScores = fmap (fmap fst . unNodeCorrScores . snd) scores
 
-    (rankProds,pVals) <-
-        getRankProdNodeCorrScores . Map.elems . unNodeCorrScoresMap $ scoreMap
+    (rankProds, pVals) <- getRankProdNodeCorrScores . fmap snd $ scores
 
-    return $
-        NodeCorrScoresInfo
-        { nodeCorrScoresMap = scoreMap
-        , avgNodeCorrScores = avgScores
-        , avgPValNodeCorrScores = avgPVals
-        , rankProdNodeCorrScores = rankProds
-        , rankProdPValNodeCorrScores = pVals
-        }
+    let f avgScoresX avgStatisticX rankProdsX pValsX rest = 
+            NodeCorrScoresInfo
+                { nodeCorrScore              = rest
+                , avgNodeCorrScores          = Just avgScoresX
+                , avgStatisticNodeCorrScores = avgStatisticX
+                , rankProdNodeCorrScores     = Just rankProdsX
+                , rankProdPValNodeCorrScores = Just pValsX
+                }
+        nodeCorrScoresInfo =
+            V.zipWith5 f
+                    (unFlatNodeCorrScores avgScores)
+                    (unStatisticNodeCorrScores avgStatistic)
+                    (unFlatNodeCorrScores rankProds)
+                    (unPValNodeCorrScores pVals)
+                . V.fromList
+                . transpose
+                . fmap V.toList
+                $ nodeScores
+
+    return nodeCorrScoresInfo

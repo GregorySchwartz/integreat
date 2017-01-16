@@ -21,13 +21,17 @@ import qualified Data.IntMap.Strict as IMap
 import Control.Monad
 
 -- Cabal
+import Control.Concurrent.Async
+import Control.Lens
+import Data.Random
 import qualified Data.Vector as VB
 import qualified Data.Vector.Unboxed as VU
 import qualified Data.Vector.Generic as V
-import Data.Random
-import Control.Concurrent.Async
-import Control.Lens
 import Numeric.LinearAlgebra
+import Statistics.Resampling
+import Statistics.Resampling.Bootstrap
+import Statistics.Types
+import System.Random.MWC (createSystemRandom)
 
 -- Local
 import Types
@@ -49,7 +53,7 @@ cosineIntegrate nPerm size vMap l1 l2 e1 e2 =
          . IMap.toAscList
          . fillIntMap size
          )
-        . mapConcurrently (uncurry (cosinePerm nPerm))
+        . mapConcurrently (uncurry (cosinePermBoot nPerm size))
         . IMap.intersectionWith (,) newE1
         $ newE2
   where
@@ -91,7 +95,7 @@ cosineSimIMap x y = (imapSum $ IMap.intersectionWith (*) x y)
 cosinePerm :: Permutations
            -> IMap.IntMap Double
            -> IMap.IntMap Double
-           -> IO (Double, Maybe PValue)
+           -> IO (Double, Maybe Statistic)
 cosinePerm (Permutations nPerm) xs ys = do
     let obs     = cosineSimIMap xs ys
         expTest = (>= abs obs) . abs
@@ -117,7 +121,7 @@ cosinePermFromDist
     -> EdgeValues
     -> IMap.IntMap Double
     -> IMap.IntMap Double
-    -> IO (Double, Maybe PValue)
+    -> IO (Double, Maybe Statistic)
 cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
     let obs     = cosineSimIMap xs ys
         expTest = (>= abs obs) . abs
@@ -139,6 +143,33 @@ cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
     let pVal = PValue $ (fromIntegral exp) / (fromIntegral nPerm)
 
     return (obs, Just pVal)
+
+-- | Get the cosine similarity and the bootstrap using the edge distribution
+-- from the second network.
+cosinePermBoot
+    :: Permutations
+    -> Size
+    -> IMap.IntMap Double
+    -> IMap.IntMap Double
+    -> IO (Double, Maybe Statistic)
+cosinePermBoot (Permutations nPerm) (Size size) xs ys = do
+    let obs               = cosineSimIMap xs ys
+        originalSample    = VU.fromList . fmap fromIntegral $ [0..size - 1]
+        bootstrapFunc :: Sample -> Double
+        bootstrapFunc idx =
+            cosineSimIMap (subsetIMap idxList xs) . subsetIMap idxList $ ys
+          where
+            idxList = fmap truncate . VU.toList $ idx
+
+    g <- createSystemRandom
+
+    randomSamples <- resample g [Function bootstrapFunc] nPerm originalSample
+
+    let bootstrap = head
+                  . bootstrapBCA 0.95 originalSample [Function bootstrapFunc]
+                  $ randomSamples
+
+    return (obs, Just . Bootstrap $ bootstrap)
 
 -- | Random sample cosine.
 randomCosine :: EdgeValues

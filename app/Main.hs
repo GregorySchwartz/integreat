@@ -16,22 +16,22 @@ entities.
 module Main where
 
 -- Standard
-import Data.Bool
-import Data.Maybe
-import qualified Data.Set as Set
-import qualified Data.Map.Strict as Map
-import Data.Monoid
-import System.IO
 import Control.Monad
+import Data.Bool
+import qualified Data.Map.Strict as Map
+import Data.Maybe
+import Data.Monoid
+import qualified Data.Set as Set
+import System.IO
 
 -- Cabal
-import qualified Data.Vector as V
-import qualified Data.ByteString.Lazy.Char8 as CL
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import qualified Data.Csv as CSV
 import qualified Control.Lens as L
 import Control.Monad.Trans
+import qualified Data.ByteString.Lazy.Char8 as CL
+import qualified Data.Csv as CSV
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import qualified Data.Vector as V
 import Options.Generic
 
 import qualified Foreign.R as R
@@ -72,7 +72,7 @@ data Options = Options { dataInput          :: Maybe String
                        , entityFilterStdDev :: Maybe Double
                                            <?> "([Nothing] | DOUBLE) Remove entities that have less than this value for their standard deviation among all samples."
                        , permutations       :: Maybe Int
-                                           <?> "([1000] | INT) The number of permutations for cosine similarity permutation test."
+                                           <?> "([1000] | INT) The number of permutations for cosine similarity permutation test or bootstrap. Right now just does bootstrap and only shows the first comparison if there are multiple comparisons."
                        }
                deriving (Generic)
 
@@ -191,7 +191,7 @@ getPremadeIntegrationInput opts = do
            $ (read contents :: [([String], [(String, String, Double)])])
 
 -- | Show the accuracy of a test analysis.
-showAccuracy :: Set.Set ID -> IDVec -> NodeCorrScoresInfo -> T.Text
+showAccuracy :: Set.Set ID -> IDVec -> V.Vector NodeCorrScoresInfo -> T.Text
 showAccuracy truthSet idVec nodeCorrScoresInfo =
     T.pack . show . getAccuracy truthSet idVec $ nodeCorrScoresInfo
 
@@ -257,7 +257,7 @@ main = do
                $ truthSet
             else liftIO
                . T.putStr
-               . printNodeCorrScores idVec unifiedData
+               . printNodeCorrScores idVec unifiedData nodeCorrScoresMap
                $ nodeCorrScoresInfo
 
         return ()

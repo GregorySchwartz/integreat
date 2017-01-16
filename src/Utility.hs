@@ -11,6 +11,7 @@ Collections all miscellaneous functions.
 
 module Utility
     ( minMaxNorm
+    , subsetIMap
     , lookupWithError
     -- , getNeighbors
     , largestLeftEig
@@ -67,6 +68,10 @@ import Types
 -- | Min max normalize.
 minMaxNorm :: [Double] -> [Double]
 minMaxNorm xs = fmap (\x -> (x - minimum xs) / (maximum xs - minimum xs)) xs
+           
+-- | Get a subset of indices of an IntMap.
+subsetIMap :: [Int] -> IMap.IntMap a -> IMap.IntMap a
+subsetIMap idx = flip IMap.intersection (IMap.fromList . zip idx $ [0..])
 
 -- | Map lookup with a custom error if the value is not found.
 lookupWithError :: (Ord a) => String -> a -> Map.Map a b -> b
@@ -200,8 +205,8 @@ groupDataSets (Just !x) (Just !y) = Just (_entityValue x, _entityValue y)
 
 -- | Fill in an intmap with zeros for missing values.
 fillIntMap :: Size
-           -> IMap.IntMap (Double, Maybe PValue)
-           -> IMap.IntMap (Double, Maybe PValue)
+           -> IMap.IntMap (Double, Maybe Statistic)
+           -> IMap.IntMap (Double, Maybe Statistic)
 fillIntMap (Size size) m =
     foldl'
         (\acc x -> IMap.alter (maybe (Just (0, Nothing)) Just) x acc)
@@ -308,22 +313,21 @@ rToMatJSON (Size size) mat = do
 -- five changed vertices out off 10 and two were rank 8 and 10 while the others
 -- were in the top five, we would have (1 - ((3 + 5) / (10 + 9 + 8 + 7 + 6))) as
 -- the accuracy."
-getAccuracy :: Set.Set ID -> IDVec -> NodeCorrScoresInfo -> Double
-getAccuracy truth (IDVec idVec) = (1 -)
-                                . (/ fact)
-                                . sum
-                                . filter (> 0)
-                                . fmap ( flip
-                                            (-)
-                                            (fromIntegral . Set.size $ truth)
-                                       . fst
-                                       )
-                                . filter (flip Set.member truth . snd)
-                                . rankNodeCorrScores (IDVec idVec)
-                                . NodeCorrScores
-                                . fmap (, Nothing)
-                                . unFlatNodeCorrScores
-                                . avgNodeCorrScores
+getAccuracy :: Set.Set ID -> IDVec -> V.Vector NodeCorrScoresInfo -> Double
+getAccuracy truth (IDVec idVec) =
+    (1 -)
+        . (/ fact)
+        . sum
+        . filter (> 0)
+        . fmap ( flip
+                    (-)
+                    (fromIntegral . Set.size $ truth)
+               . fst
+               )
+        . filter (flip Set.member truth . snd)
+        . rankNodeCorrScores (IDVec idVec)
+        . NodeCorrScores
+        . fmap ((, Nothing) . fromJust . avgNodeCorrScores)
   where
     fact = fromIntegral
          . sum

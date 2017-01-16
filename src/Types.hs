@@ -19,16 +19,17 @@ import qualified Data.IntMap.Strict as IMap
 import GHC.Generics
 
 -- Cabal
-import qualified Data.Vector as V
-import qualified Data.Vector.Storable as VS
-import qualified Data.Vector.Unboxed as VU
-import qualified Data.Text as T
-import Data.Csv
-import Data.Graph.Inductive
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Lens
+import Data.Csv
+import Data.Graph.Inductive
+import qualified Data.Text as T
+import qualified Data.Vector as V
+import qualified Data.Vector.Storable as VS
+import qualified Data.Vector.Unboxed as VU
 import Numeric.LinearAlgebra
+import Statistics.Resampling.Bootstrap
 
 -- Local
 
@@ -46,7 +47,9 @@ newtype Counter          = Counter Int deriving (Eq, Ord, Num)
 newtype NumSamples       = NumSamples { unNumSamples :: Int }
 newtype WalkerRestart    = WalkerRestart { unWalkerRestart :: Double }
 newtype DataSetName      = DataSetName T.Text deriving (Eq, Ord, Show)
-newtype PValue           = PValue { unPValue :: Double } deriving (Eq, Ord, Show)
+newtype CI = CI
+    { unCI :: (Double, Double)
+    } deriving (Eq,Ord,Show)
 newtype Permutations     = Permutations Int
 newtype EdgeValues       = EdgeValues (VU.Vector Double)
 newtype LevelName        = LevelName { unLevelName :: T.Text }
@@ -82,15 +85,19 @@ newtype VertexSimValues =
 newtype TransProbMatrix  =
     TransProbMatrix { unTransProbMatrix :: Matrix Double }
 newtype LevelGr = LevelGr { unLevelGr :: Gr Int Double } deriving (Show)
-newtype NodeCorrScores   =
-    NodeCorrScores { unNodeCorrScores :: V.Vector (Double, Maybe PValue) }
+newtype NodeCorrScores = NodeCorrScores
+    { unNodeCorrScores :: V.Vector (Double, Maybe Statistic)
+    } deriving (Show)
 newtype FlatNodeCorrScores =
     FlatNodeCorrScores { unFlatNodeCorrScores :: V.Vector Double }
 newtype PValNodeCorrScores =
     PValNodeCorrScores { unPValNodeCorrScores :: V.Vector Double }
+newtype StatisticNodeCorrScores = StatisticNodeCorrScores
+    { unStatisticNodeCorrScores :: V.Vector (Maybe Statistic)
+    }
 newtype NodeCorrScoresMap = NodeCorrScoresMap
     { unNodeCorrScoresMap :: Map.Map (LevelName, LevelName) NodeCorrScores
-    }
+    } deriving (Show)
 
 newtype EdgeSimMap       =
     EdgeSimMap { unEdgeSimMap :: (Map.Map LevelName EdgeSimMatrix) }
@@ -123,6 +130,11 @@ newtype Walker a =
 --              , MonadState WalkerStateCSRW
 --              )
 
+data Statistic
+    = PValue { unPValue :: Double}
+    | Bootstrap { unBootstrap :: Estimate}
+    deriving (Show)
+     
 data Entity = Entity { _entityID    :: !ID
                      , _dataSetName :: !DataSetName
                      , _levelName   :: !LevelName
@@ -174,12 +186,13 @@ instance ToNamedRecord VertexEntry
 instance DefaultOrdered VertexEntry
 
 data NodeCorrScoresInfo = NodeCorrScoresInfo
-    { nodeCorrScoresMap          :: NodeCorrScoresMap
-    , avgNodeCorrScores          :: FlatNodeCorrScores
-    , avgPValNodeCorrScores      :: PValNodeCorrScores
-    , rankProdNodeCorrScores     :: FlatNodeCorrScores
-    , rankProdPValNodeCorrScores :: PValNodeCorrScores
+    { nodeCorrScore              :: ![Double]
+    , avgNodeCorrScores          :: !(Maybe Double)
+    , avgStatisticNodeCorrScores :: !(Maybe Statistic)
+    , rankProdNodeCorrScores     :: !(Maybe Double)
+    , rankProdPValNodeCorrScores :: !(Maybe Double)
     }
+    deriving (Show)
 
 makeLenses ''Entity
 
