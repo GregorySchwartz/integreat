@@ -15,13 +15,16 @@ module Alignment.Cosine
     ) where
 
 -- Standard
-import Data.Tuple
-import Data.List
-import qualified Data.IntMap.Strict as IMap
 import Control.Monad
+import qualified Data.IntMap.Strict as IMap
+import Data.List
+import Data.Maybe
+import Data.Tuple
+import Debug.Trace
 
 -- Cabal
 import Control.Concurrent.Async
+import qualified Control.Foldl as Fold
 import Control.Lens
 import Data.Random
 import qualified Data.Vector as VB
@@ -53,7 +56,7 @@ cosineIntegrate nPerm size vMap l1 l2 e1 e2 =
          . IMap.toAscList
          . fillIntMap size
          )
-        . mapConcurrently (uncurry (cosinePermBoot nPerm size))
+        . mapConcurrently (uncurry (cosineBoot nPerm size))
         . IMap.intersectionWith (,) newE1
         $ newE2
   where
@@ -89,6 +92,15 @@ cosineSimIMap x y = (imapSum $ IMap.intersectionWith (*) x y)
   where
     imapNorm = sqrt . imapSum . IMap.map (^ 2)
     imapSum  = IMap.foldl' (+) 0
+
+-- | Cosine similarity of a foldable of tuples.
+cosineSimFold :: (Foldable f) => f (Double, Double) -> Double
+cosineSimFold = Fold.fold cosine
+  where
+    cosine = (/) <$> num <*> den
+    num = Fold.Fold (\acc (x, y) -> acc + (x * y)) 0 id
+    den = (*) <$> norm fst <*> norm snd
+    norm f = Fold.Fold (\acc x -> acc + ((f x) ^ 2)) 0 sqrt
 
 -- | Get the cosine similarity and the p value of that similarity through the
 -- permutation test by shuffling non-zero edges of the second vertex.
@@ -143,16 +155,58 @@ cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
     let pVal = PValue $ (fromIntegral exp) / (fromIntegral nPerm)
 
     return (obs, Just pVal)
-
+    
 -- | Get the cosine similarity and the bootstrap using the edge distribution
 -- from the second network.
-cosinePermBoot
+cosineBoot
     :: Permutations
     -> Size
     -> IMap.IntMap Double
     -> IMap.IntMap Double
     -> IO (Double, Maybe Statistic)
-cosinePermBoot (Permutations nPerm) (Size size) xs ys = do
+cosineBoot (Permutations nPerm) (Size size) xs ys = do
+    let obs            = cosineSimIMap xs ys
+        originalSample = VU.fromList . fmap fromIntegral $ [0..size - 1]
+        xsVec          = imapToVec (Size size) 0 xs
+        ysVec          = imapToVec (Size size) 0 ys
+        xsYSVec        = VB.zip xsVec ysVec
+        bootstrapFunc :: Sample -> Double
+        bootstrapFunc = (\x -> if isNaN x then 0 else x) -- Convert NaN values to 0. Whether this should be done or not is a matter of opinion.
+                      . cosineSimFold
+                      . fmap (\x -> xsYSVec VB.! truncate x)
+                      . (\x -> VU.convert x :: VB.Vector Double)
+
+    g <- createSystemRandom
+
+    randomSamples <- resample g [Function bootstrapFunc] nPerm originalSample
+    
+    let allSame = Estimate { estPoint           = obs
+                           , estLowerBound      = obs
+                           , estUpperBound      = obs
+                           , estConfidenceLevel = 0.95
+                           }
+
+    if all (== head randomSamples) . (\x -> traceShow x x) $ randomSamples
+        then return (obs, Just . Bootstrap $ allSame)
+        else do
+            let bootstrap = head
+                          . bootstrapBCA
+                                0.95
+                                originalSample
+                                [Function bootstrapFunc]
+                          $ randomSamples
+
+            return (obs, Just . Bootstrap $ bootstrap)
+
+-- | Get the cosine similarity and the subsampling using the edge distribution
+-- from the second network (out of service right now).
+cosineSubsampleBoot
+    :: Permutations
+    -> Size
+    -> IMap.IntMap Double
+    -> IMap.IntMap Double
+    -> IO (Double, Maybe Statistic)
+cosineSubsampleBoot (Permutations nPerm) (Size size) xs ys = do
     let obs               = cosineSimIMap xs ys
         originalSample    = VU.fromList . fmap fromIntegral $ [0..size - 1]
         bootstrapFunc :: Sample -> Double
@@ -165,11 +219,58 @@ cosinePermBoot (Permutations nPerm) (Size size) xs ys = do
 
     randomSamples <- resample g [Function bootstrapFunc] nPerm originalSample
 
-    let bootstrap = head
-                  . bootstrapBCA 0.95 originalSample [Function bootstrapFunc]
-                  $ randomSamples
+    let allSame = Estimate { estPoint           = obs
+                           , estLowerBound      = obs
+                           , estUpperBound      = obs
+                           , estConfidenceLevel = 0.95
+                           }
 
-    return (obs, Just . Bootstrap $ bootstrap)
+    if all (== head randomSamples) randomSamples
+        then return (obs, Just . Bootstrap $ allSame)
+        else do
+            let bootstrap =
+                  head
+                    . bootstrapBCA 0.95 originalSample [Function bootstrapFunc]
+                    $ randomSamples
+
+            return (obs, Just . Bootstrap $ bootstrap)
+            
+-- | Get the cosine similarity and the subsampling using the edge distribution
+-- from the second network (out of service right now).
+cosineOldBoot
+    :: Permutations
+    -> Size
+    -> IMap.IntMap Double
+    -> IMap.IntMap Double
+    -> IO (Double, Maybe Statistic)
+cosineOldBoot (Permutations nPerm) (Size size) xs ys = do
+    let obs               = cosineSimIMap xs ys
+        originalSample    = VU.fromList . fmap fromIntegral $ [0..size - 1]
+        bootstrapFunc :: Sample -> Double
+        bootstrapFunc idx =
+            cosineSimIMap (subsetIMap idxList xs) . subsetIMap idxList $ ys
+          where
+            idxList = fmap truncate . VU.toList $ idx
+
+    g <- createSystemRandom
+
+    randomSamples <- resample g [Function bootstrapFunc] nPerm originalSample
+
+    let allSame = Estimate { estPoint           = obs
+                           , estLowerBound      = obs
+                           , estUpperBound      = obs
+                           , estConfidenceLevel = 0.95
+                           }
+
+    if all (== head randomSamples) randomSamples
+        then return (obs, Just . Bootstrap $ allSame)
+        else do
+            let bootstrap =
+                  head
+                    . bootstrapBCA 0.95 originalSample [Function bootstrapFunc]
+                    $ randomSamples
+
+            return (obs, Just . Bootstrap $ bootstrap)
 
 -- | Random sample cosine.
 randomCosine :: EdgeValues

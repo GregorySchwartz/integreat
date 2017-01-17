@@ -12,6 +12,7 @@ Collections all miscellaneous functions.
 module Utility
     ( minMaxNorm
     , subsetIMap
+    , imapToVec
     , lookupWithError
     -- , getNeighbors
     , largestLeftEig
@@ -47,6 +48,7 @@ import Control.Concurrent.Async
 
 -- Cabal
 import qualified Data.Vector as V
+import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Storable as VS
 import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.Text as T
@@ -68,10 +70,15 @@ import Types
 -- | Min max normalize.
 minMaxNorm :: [Double] -> [Double]
 minMaxNorm xs = fmap (\x -> (x - minimum xs) / (maximum xs - minimum xs)) xs
-           
+
 -- | Get a subset of indices of an IntMap.
 subsetIMap :: [Int] -> IMap.IntMap a -> IMap.IntMap a
 subsetIMap idx = flip IMap.intersection (IMap.fromList . zip idx $ [0..])
+
+-- | Convert an IntMap to a vector with a filler.
+imapToVec :: (VG.Vector v a, Show a) => Size -> a -> IMap.IntMap a -> v a
+imapToVec (Size size) filler =
+    (VG.//) (VG.replicate size filler) . IMap.toAscList
 
 -- | Map lookup with a custom error if the value is not found.
 lookupWithError :: (Ord a) => String -> a -> Map.Map a b -> b
