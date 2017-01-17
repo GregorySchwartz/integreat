@@ -20,7 +20,6 @@ import qualified Data.IntMap.Strict as IMap
 import Data.List
 import Data.Maybe
 import Data.Tuple
-import Debug.Trace
 
 -- Cabal
 import Control.Concurrent.Async
@@ -186,7 +185,7 @@ cosineBoot (Permutations nPerm) (Size size) xs ys = do
                            , estConfidenceLevel = 0.95
                            }
 
-    if all (== head randomSamples) . (\x -> traceShow x x) $ randomSamples
+    if all (== head randomSamples) randomSamples
         then return (obs, Just . Bootstrap $ allSame)
         else do
             let bootstrap = head
