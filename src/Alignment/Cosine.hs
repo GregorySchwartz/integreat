@@ -154,7 +154,7 @@ cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
     let pVal = PValue $ (fromIntegral exp) / (fromIntegral nPerm)
 
     return (obs, Just pVal)
-    
+
 -- | Get the cosine similarity and the bootstrap using the edge distribution
 -- from the second network.
 cosineBoot
@@ -178,24 +178,15 @@ cosineBoot (Permutations nPerm) (Size size) xs ys = do
     g <- createSystemRandom
 
     randomSamples <- resample g [Function bootstrapFunc] nPerm originalSample
-    
-    let allSame = Estimate { estPoint           = obs
-                           , estLowerBound      = obs
-                           , estUpperBound      = obs
-                           , estConfidenceLevel = 0.95
-                           }
 
-    if all (== head randomSamples) randomSamples
-        then return (obs, Just . Bootstrap $ allSame)
-        else do
-            let bootstrap = head
-                          . bootstrapBCA
-                                0.95
-                                originalSample
-                                [Function bootstrapFunc]
-                          $ randomSamples
+    let bootstrap = head
+                    . bootstrapBCA
+                        0.95
+                        originalSample
+                        [Function bootstrapFunc]
+                    $ randomSamples
 
-            return (obs, Just . Bootstrap $ bootstrap)
+    return (obs, Just . Bootstrap $ bootstrap)
 
 -- | Get the cosine similarity and the subsampling using the edge distribution
 -- from the second network (out of service right now).
@@ -233,7 +224,7 @@ cosineSubsampleBoot (Permutations nPerm) (Size size) xs ys = do
                     $ randomSamples
 
             return (obs, Just . Bootstrap $ bootstrap)
-            
+
 -- | Get the cosine similarity and the subsampling using the edge distribution
 -- from the second network (out of service right now).
 cosineOldBoot
