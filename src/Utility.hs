@@ -251,10 +251,15 @@ standardLevelToRJSON (StandardLevel level) = do
               $ level
         cargo = B.unpack . JSON.encode $ input
 
+    -- Need to make a copy of the cargo for some reason or there is a chance of
+    -- a segmentation fault. Can probably use canonical method when the parser
+    -- is implemented in inline-r.
     [r| suppressPackageStartupMessages(library(jsonlite));
         suppressPackageStartupMessages(library(gtools));
+        suppressPackageStartupMessages(library(data.table));
         write("Sending JSON matrix to R.", stderr());
-        ls = fromJSON(cargo_hs);
+        cargo = copy(cargo_hs)
+        ls = fromJSON(cargo);
         ls = ls[mixedsort(names(ls))];
         df = as.data.frame(ls);
         df[is.na(df)] = 0;
