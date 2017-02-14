@@ -124,11 +124,13 @@ getRankProdNodeCorrScores :: [NodeCorrScores]
 getRankProdNodeCorrScores xs = do
     let crate = B.unpack . A.encode . fmap (fmap fst . unNodeCorrScores) $ xs
 
-    resultsDF <- [r| suppressPackageStartupMessages(library("jsonlite"))
-                     suppressPackageStartupMessages(library("RankProd"))
+    resultsDF <- [r| suppressPackageStartupMessages(library("jsonlite"));
+                     suppressPackageStartupMessages(library("RankProd"));
+                     suppressPackageStartupMessages(library("data.table"));
                      write("Getting rank product.", stderr());
-                     df = fromJSON(crate_hs)
-                     x = capture.output(result <- RP(t(df), rep(1, ncol(t(df))), logged=TRUE))
+                     crate = copy(crate_hs);
+                     df = fromJSON(crate);
+                     x = capture.output(result <- RP(t(df), rep(1, ncol(t(df))), logged=TRUE));
                      result
                  |]
 

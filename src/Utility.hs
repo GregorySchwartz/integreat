@@ -258,7 +258,7 @@ standardLevelToRJSON (StandardLevel level) = do
         suppressPackageStartupMessages(library(gtools));
         suppressPackageStartupMessages(library(data.table));
         write("Sending JSON matrix to R.", stderr());
-        cargo = copy(cargo_hs)
+        cargo = copy(cargo_hs);
         ls = fromJSON(cargo);
         ls = ls[mixedsort(names(ls))];
         df = as.data.frame(ls);
