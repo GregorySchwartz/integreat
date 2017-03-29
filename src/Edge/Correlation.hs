@@ -14,24 +14,31 @@ module Edge.Correlation
     ( getGrKendall
     , getSimMatKendall
     , getSimMatKendallR
+    , getSimMatSpearman
+    , spearmanCorrelate
     , getSimMatSpearmanR
     ) where
 
 -- Standard
-import Data.Maybe
+import Control.Monad
 import Data.Bool
 import Data.List
-import qualified Data.Sequence as Seq
-import qualified Data.Map.Strict as Map
-import qualified Data.IntMap.Strict as IMap
+import Data.Maybe
 import qualified Data.Foldable as F
-import Control.Monad
+import qualified Data.IntMap.Strict as IMap
+import qualified Data.Map.Strict as Map
+import qualified Data.Sequence as Seq
 
 -- Cabal
-import qualified Data.Vector as V
+import Control.Monad.Trans
 import Data.Graph.Inductive
+import Statistics.Correlation
+import Statistics.Distribution
+import Statistics.Distribution.StudentT
+import System.ProgressBar
 import qualified Control.Foldl as Fold
 import qualified Control.Lens as L
+import qualified Data.Vector as V
 import qualified Numeric.LinearAlgebra as N
 
 import qualified Foreign.R as R
@@ -148,7 +155,7 @@ getSimMatKendallR size level = do
 
 -- | Correlate two groups of entities, where each group is a collection of
 -- measurements (specifically for a single type of entity, for instance
--- a single protein). If there is missing data, we just say their is no
+-- a single protein). If there is missing data, we just say there is no
 -- correlation: 0.
 kendallCorrelate :: [Maybe Entity] -> [Maybe Entity] -> IO (Maybe Double)
 kendallCorrelate e1 e2 = R.runRegion $ do
@@ -166,6 +173,68 @@ kendallCorrelate e1 e2 = R.runRegion $ do
             if (R.fromSomeSEXP p :: Double) >= 0.05
                 then return Nothing
                 else return . Just $ (R.fromSomeSEXP t :: Double)
+
+-- | Take one level and get the similarity matrix by using correlations (a
+-- co-expression network). The default value is applied to missing data.
+getSimMatSpearman :: StandardLevel -> IO EdgeSimMatrix
+getSimMatSpearman (StandardLevel level) = do
+    (bar, _) <-
+        startProgress
+            (msg "Getting correlations for each level")
+            percentage
+            50
+            (round $ (n / 2) * (n + 1))
+    fmap EdgeSimMatrix
+        . Fold.foldM (Fold.FoldM (step bar) begin extract)
+        . pairs (,)
+        . fmap (L.over L._2 F.toList)
+        . Map.toList
+        $ level
+  where
+      n = fromIntegral . Map.size $ level
+      step bar acc x =
+        case uncurry getCorr x of
+            ((_, _), Nothing) -> incProgress bar 1 >> return acc
+            ((!idx1, !idx2), (Just !val)) -> do
+                incProgress bar 1
+                return
+                    . alterMap idx1 idx2 val
+                    . alterMap idx2 idx1 val
+                    $ acc
+      begin      = return IMap.empty
+      extract    = return
+      alterMap new query val =
+            IMap.alter ( maybe (Just . IMap.singleton new $ val)
+                               (Just . IMap.insert new val)
+                       )
+                        query
+      getCorr ((!id1, !idx1), !x) ((!id2, !idx2), !y) =
+            ((idx1, idx2), spearmanCorrelateEntities x y)
+
+-- | Correlate two groups of entities, where each group is a collection of
+-- measurements (specifically for a single type of entity, for instance
+-- a single protein).
+spearmanCorrelateEntities :: [Maybe Entity] -> [Maybe Entity] -> Maybe Double
+spearmanCorrelateEntities e1 e2 = do
+    let joined = V.fromList . catMaybes . zipWith groupDataSets e1 $ e2
+
+    lengthCheck <- if V.length joined > 2 then Just joined else Nothing
+
+    let (Rho !coeff, P !pVal) = spearmanCorrelate lengthCheck
+
+    threshCheck <- if pVal < 0.05 then Just coeff else Nothing
+
+    return threshCheck
+
+-- | Correlate two lists with p values.
+spearmanCorrelate :: V.Vector (Double, Double) -> (Rho, P)
+spearmanCorrelate xs =
+    (Rho coeff, P (pVal s))
+  where
+    n     = fromIntegral . V.length $ xs
+    coeff = spearman xs
+    s     = coeff * ((sqrt (n - 2)) / (1 - (coeff ^ 2)))
+    pVal stat = 2 * (complCumulative (studentT (fromIntegral $ V.length xs - 2)) . abs $ stat)
 
 -- | Complete R version.
 -- Take one level and get the similarity matrix by using correlations (a

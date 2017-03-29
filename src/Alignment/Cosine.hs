@@ -6,6 +6,7 @@ similarity.
 -}
 
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Alignment.Cosine
     ( cosineIntegrate
@@ -16,24 +17,27 @@ module Alignment.Cosine
 
 -- Standard
 import Control.Monad
-import qualified Data.IntMap.Strict as IMap
 import Data.List
 import Data.Maybe
+import Data.Monoid
 import Data.Tuple
+import qualified Data.IntMap.Strict as IMap
 
 -- Cabal
 import Control.Concurrent.Async
-import qualified Control.Foldl as Fold
 import Control.Lens
 import Data.Random
-import qualified Data.Vector as VB
-import qualified Data.Vector.Unboxed as VU
-import qualified Data.Vector.Generic as V
-import Numeric.LinearAlgebra
+import Numeric.LinearAlgebra hiding ((<>))
 import Statistics.Resampling
 import Statistics.Resampling.Bootstrap
 import Statistics.Types
+import System.ProgressBar
 import System.Random.MWC (createSystemRandom)
+import qualified Control.Foldl as Fold
+import qualified Data.Text as T
+import qualified Data.Vector as VB
+import qualified Data.Vector.Generic as V
+import qualified Data.Vector.Unboxed as VU
 
 -- Local
 import Types
@@ -48,26 +52,37 @@ cosineIntegrate :: Permutations
                 -> EdgeSimMatrix
                 -> EdgeSimMatrix
                 -> IO NodeCorrScores
-cosineIntegrate nPerm size vMap l1 l2 e1 e2 =
+cosineIntegrate nPerm size vMap l1 l2 e1 e2 = do
+    -- edgeVals :: EdgeValues
+    -- edgeVals = EdgeValues . VU.fromList . concatMap IMap.elems . IMap.elems $ newE2
+    let newE1 :: IMap.IntMap (IMap.IntMap Double)
+        newE1     = unEdgeSimMatrix
+                  . cosineUpdateSimMat e1
+                  . unVertexSimValues
+                  $ vertexSim
+        newE2 :: IMap.IntMap (IMap.IntMap Double)
+        newE2     = unEdgeSimMatrix
+                  . cosineUpdateSimMat e2
+                  . unVertexSimValues
+                  $ vertexSim
+        vertexSim = getVertexSim l1 l2 vMap
+        
+    (bar, _) <-
+        startProgress
+            (msg . T.unpack $ ("Working on " <> unLevelName l1 <> " / " <> unLevelName l2))
+            percentage
+            50
+            (fromIntegral $ unSize size)
+                    
     fmap ( NodeCorrScores
          . VB.fromList
          . fmap snd
          . IMap.toAscList
          . fillIntMap size
          )
-        . mapConcurrently (uncurry (cosineBoot nPerm size))
+        . mapConcurrently (uncurry (cosineBoot bar nPerm size))
         . IMap.intersectionWith (,) newE1
         $ newE2
-  where
-    -- edgeVals :: EdgeValues
-    -- edgeVals = EdgeValues . VU.fromList . concatMap IMap.elems . IMap.elems $ newE2
-    newE1 :: IMap.IntMap (IMap.IntMap Double)
-    newE1         =
-        unEdgeSimMatrix . cosineUpdateSimMat e1 . unVertexSimValues $ vertexSim
-    newE2 :: IMap.IntMap (IMap.IntMap Double)
-    newE2         =
-        unEdgeSimMatrix . cosineUpdateSimMat e2 . unVertexSimValues $ vertexSim
-    vertexSim     = getVertexSim l1 l2 vMap
 
 -- | Update the similarity matrices where the diagonal contains the similarity
 -- between vertices of different levels.
@@ -158,12 +173,13 @@ cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
 -- | Get the cosine similarity and the bootstrap using the edge distribution
 -- from the second network.
 cosineBoot
-    :: Permutations
+    :: ProgressRef
+    -> Permutations
     -> Size
     -> IMap.IntMap Double
     -> IMap.IntMap Double
     -> IO (Double, Maybe Statistic)
-cosineBoot (Permutations nPerm) (Size size) xs ys = do
+cosineBoot bar (Permutations nPerm) (Size size) xs ys = do
     let obs            = cosineSimIMap xs ys
         originalSample = VU.fromList . fmap fromIntegral $ [0..size - 1]
         xsVec          = imapToVec (Size size) 0 xs
@@ -185,6 +201,8 @@ cosineBoot (Permutations nPerm) (Size size) xs ys = do
                         originalSample
                         [Function bootstrapFunc]
                     $ randomSamples
+
+    incProgress bar 1
 
     return (obs, Just . Bootstrap $ bootstrap)
 

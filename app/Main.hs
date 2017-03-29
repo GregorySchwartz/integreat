@@ -137,7 +137,8 @@ getIntegrationInput opts = do
                       $ opts
         getSimMat ARACNE = getSimMatAracneR size
         getSimMat KendallCorrelation = getSimMatKendallR size
-        getSimMat SpearmanCorrelation = getSimMatSpearmanR size
+        getSimMat SpearmanCorrelation = liftIO . getSimMatSpearman
+        --getSimMat SpearmanCorrelation = getSimMatSpearmanR size
         -- getSimMat KendallCorrelation = getSimMatKendall
         --                                 eDiff
         --                                 (MaximumEdge 1)
@@ -217,7 +218,7 @@ main = do
                 Permutations . fromMaybe 1000 . unHelpful . permutations $ opts
 
         liftIO $
-            hPutStrLn stderr "Calculating vertex similarities between networks."
+            hPutStrLn stderr "Calculating vertex similarities and bootstraps between networks."
 
         nodeCorrScoresMap <- case alignment of
             CosineSimilarity -> liftIO

@@ -23,12 +23,12 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
 -- Cabal
+import Data.Graph.Inductive
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy.Char8 as B
-import Data.Graph.Inductive
+import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
-import qualified Data.Text as T
 
 import qualified Foreign.R as R
 import Language.R.Instance as R
@@ -60,7 +60,7 @@ integrateCosineSim nPerm size vertexSimMap (EdgeSimMap edgeSimMap) =
                 y
                 (lookupLevel x)
                 (lookupLevel y)
-        return ( (x, y), res)
+        return ((x, y), res)
     levels        = Map.keys edgeSimMap
     lookupLevel l = lookupWithError
                         ( "Level: "

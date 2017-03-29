@@ -42,10 +42,12 @@ newtype Bandwidth        = Bandwidth { unBandwidth :: Double }
 newtype MaximumEdge      = MaximumEdge { unMaximumEdge :: Double }
 newtype StdDevThreshold  = StdDevThreshold { unStdDevThreshold :: Double }
 newtype EntityDiff       = EntityDiff  { unEntityDiff  :: T.Text }
-newtype Size             = Size Int
+newtype Size             = Size { unSize :: Int }
 newtype Counter          = Counter Int deriving (Eq, Ord, Num)
 newtype NumSamples       = NumSamples { unNumSamples :: Int }
 newtype WalkerRestart    = WalkerRestart { unWalkerRestart :: Double }
+newtype P                = P Double deriving Show
+newtype Rho              = Rho Double deriving Show
 newtype DataSetName      = DataSetName T.Text deriving (Eq, Ord, Show)
 newtype CI = CI
     { unCI :: (Double, Double)
@@ -70,7 +72,7 @@ newtype Level = Level
     }
 newtype StandardLevel = StandardLevel
     { unStandardLevel :: (Map.Map (ID, Int) (Seq.Seq (Maybe Entity)))
-    }
+    } deriving (Show)
 newtype UnifiedData      =
     UnifiedData { unUnifiedData :: (Map.Map ID (Map.Map DataSetName Entity)) }
 

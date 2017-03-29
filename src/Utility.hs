@@ -258,7 +258,9 @@ standardLevelToRJSON (StandardLevel level) = do
         suppressPackageStartupMessages(library(gtools));
         suppressPackageStartupMessages(library(data.table));
         write("Sending JSON matrix to R.", stderr());
+        print(cargo_hs)
         cargo = copy(cargo_hs);
+        print(cargo)
         ls = fromJSON(cargo);
         ls = ls[mixedsort(names(ls))];
         df = as.data.frame(ls);
@@ -270,7 +272,7 @@ standardLevelToRJSON (StandardLevel level) = do
 -- map.
 rToMat :: Size -> R.SomeSEXP s -> R.R s (IMap.IntMap (IMap.IntMap Double))
 rToMat (Size size) mat = do
-    [r| library(reshape2) |]
+    [r| suppressPackageStartupMessages(library(reshape2)) |]
     df <- [r| mat = as.matrix(mat_hs);
               mat[is.na(mat)] = 0;
               df = melt(mat);

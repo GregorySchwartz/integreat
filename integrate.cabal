@@ -26,27 +26,28 @@ library
                      , Integrate
                      , Print
   build-depends:       base >= 4.7 && < 5
-                     , hmatrix
-                     , sequence
-                     , parallel
-                     , containers
-                     , statistics
-                     , vector
-                     , vector-th-unbox
-                     , random-fu
-                     , mwc-random
-                     , mtl
-                     , lens
+                     , aeson
+                     , async
                      , bytestring
-                     , text
-                     , text-show
-                     , stringsearch
                      , cassava
+                     , containers
                      , fgl
                      , foldl
-                     , aeson
+                     , hmatrix
                      , inline-r
-                     , async
+                     , lens
+                     , mtl
+                     , mwc-random
+                     , parallel
+                     , random-fu
+                     , sequence
+                     , statistics
+                     , stringsearch
+                     , terminal-progress-bar
+                     , text
+                     , text-show
+                     , vector
+                     , vector-th-unbox
   ghc-options:         -O2
   default-language:    Haskell2010
 
