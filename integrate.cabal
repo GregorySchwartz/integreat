@@ -43,7 +43,6 @@ library
                      , sequence
                      , statistics
                      , stringsearch
-                     , terminal-progress-bar
                      , text
                      , text-show
                      , vector

@@ -31,7 +31,6 @@ import Numeric.LinearAlgebra hiding ((<>))
 import Statistics.Resampling
 import Statistics.Resampling.Bootstrap
 import Statistics.Types
-import System.ProgressBar
 import System.Random.MWC (createSystemRandom)
 import qualified Control.Foldl as Fold
 import qualified Data.Text as T
@@ -67,20 +66,13 @@ cosineIntegrate nPerm size vMap l1 l2 e1 e2 = do
                   $ vertexSim
         vertexSim = getVertexSim l1 l2 vMap
         
-    (bar, _) <-
-        startProgress
-            (msg . T.unpack $ ("Working on " <> unLevelName l1 <> " / " <> unLevelName l2))
-            percentage
-            50
-            (fromIntegral $ unSize size)
-                    
     fmap ( NodeCorrScores
          . VB.fromList
          . fmap snd
          . IMap.toAscList
          . fillIntMap size
          )
-        . mapConcurrently (uncurry (cosineBoot bar nPerm size))
+        . mapConcurrently (uncurry (cosineBoot nPerm size))
         . IMap.intersectionWith (,) newE1
         $ newE2
 
@@ -173,13 +165,12 @@ cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
 -- | Get the cosine similarity and the bootstrap using the edge distribution
 -- from the second network.
 cosineBoot
-    :: ProgressRef
-    -> Permutations
+    :: Permutations
     -> Size
     -> IMap.IntMap Double
     -> IMap.IntMap Double
     -> IO (Double, Maybe Statistic)
-cosineBoot bar (Permutations nPerm) (Size size) xs ys = do
+cosineBoot (Permutations nPerm) (Size size) xs ys = do
     let obs            = cosineSimIMap xs ys
         originalSample = VU.fromList . fmap fromIntegral $ [0..size - 1]
         xsVec          = imapToVec (Size size) 0 xs
@@ -201,8 +192,6 @@ cosineBoot bar (Permutations nPerm) (Size size) xs ys = do
                         originalSample
                         [Function bootstrapFunc]
                     $ randomSamples
-
-    incProgress bar 1
 
     return (obs, Just . Bootstrap $ bootstrap)
 

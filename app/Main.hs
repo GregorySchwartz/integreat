@@ -137,7 +137,7 @@ getIntegrationInput opts = do
                       $ opts
         getSimMat ARACNE = getSimMatAracneR size
         getSimMat KendallCorrelation = getSimMatKendallR size
-        getSimMat SpearmanCorrelation = liftIO . getSimMatSpearman
+        getSimMat SpearmanCorrelation = return . getSimMatSpearman
         --getSimMat SpearmanCorrelation = getSimMatSpearmanR size
         -- getSimMat KendallCorrelation = getSimMatKendall
         --                                 eDiff

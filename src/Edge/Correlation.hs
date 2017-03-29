@@ -35,7 +35,6 @@ import Data.Graph.Inductive
 import Statistics.Correlation
 import Statistics.Distribution
 import Statistics.Distribution.StudentT
-import System.ProgressBar
 import qualified Control.Foldl as Fold
 import qualified Control.Lens as L
 import qualified Data.Vector as V
@@ -176,33 +175,25 @@ kendallCorrelate e1 e2 = R.runRegion $ do
 
 -- | Take one level and get the similarity matrix by using correlations (a
 -- co-expression network). The default value is applied to missing data.
-getSimMatSpearman :: StandardLevel -> IO EdgeSimMatrix
+getSimMatSpearman :: StandardLevel -> EdgeSimMatrix
 getSimMatSpearman (StandardLevel level) = do
-    (bar, _) <-
-        startProgress
-            (msg "Getting correlations for each level")
-            percentage
-            50
-            (round $ (n / 2) * (n + 1))
-    fmap EdgeSimMatrix
-        . Fold.foldM (Fold.FoldM (step bar) begin extract)
+    EdgeSimMatrix
+        . Fold.fold (Fold.Fold step begin extract)
         . pairs (,)
         . fmap (L.over L._2 F.toList)
         . Map.toList
         $ level
   where
       n = fromIntegral . Map.size $ level
-      step bar acc x =
+      step acc x =
         case uncurry getCorr x of
-            ((_, _), Nothing) -> incProgress bar 1 >> return acc
-            ((!idx1, !idx2), (Just !val)) -> do
-                incProgress bar 1
-                return
-                    . alterMap idx1 idx2 val
+            ((_, _), Nothing) -> acc
+            ((!idx1, !idx2), (Just !val)) ->
+                alterMap idx1 idx2 val
                     . alterMap idx2 idx1 val
                     $ acc
-      begin      = return IMap.empty
-      extract    = return
+      begin      = IMap.empty
+      extract    = id
       alterMap new query val =
             IMap.alter ( maybe (Just . IMap.singleton new $ val)
                                (Just . IMap.insert new val)
