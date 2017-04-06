@@ -136,7 +136,7 @@ data Statistic
     = PValue { unPValue :: Double}
     | Bootstrap { unBootstrap :: Estimate}
     deriving (Show)
-     
+
 data Entity = Entity { _entityID    :: !ID
                      , _dataSetName :: !DataSetName
                      , _levelName   :: !LevelName

@@ -168,7 +168,7 @@ getNodeCorrScoresInfo scoreMap = do
 
     (rankProds, pVals) <- getRankProdNodeCorrScores . fmap snd $ scores
 
-    let f avgScoresX avgStatisticX rankProdsX pValsX rest = 
+    let f avgScoresX avgStatisticX rankProdsX pValsX rest =
             NodeCorrScoresInfo
                 { nodeCorrScore              = rest
                 , avgNodeCorrScores          = Just avgScoresX

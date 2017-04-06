@@ -56,15 +56,15 @@ executable integrate
   ghc-options:         -threaded -rtsopts -O2
   build-depends:       base
                      , integrate
-                     , optparse-generic
-                     , containers
-                     , vector
-                     , cassava
-                     , text
                      , bytestring
+                     , cassava
+                     , containers
+                     , inline-r
                      , lens
                      , mtl
-                     , inline-r
+                     , optparse-generic
+                     , text
+                     , vector
   default-language:    Haskell2010
 
 source-repository head

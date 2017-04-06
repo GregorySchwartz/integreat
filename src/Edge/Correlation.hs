@@ -37,7 +37,7 @@ import Statistics.Distribution
 import Statistics.Distribution.StudentT
 import qualified Control.Foldl as Fold
 import qualified Control.Lens as L
-import qualified Data.Vector as V
+import qualified Data.Vector.Unboxed as VU
 import qualified Numeric.LinearAlgebra as N
 
 import qualified Foreign.R as R
@@ -207,9 +207,9 @@ getSimMatSpearman (StandardLevel level) = do
 -- a single protein).
 spearmanCorrelateEntities :: [Maybe Entity] -> [Maybe Entity] -> Maybe Double
 spearmanCorrelateEntities e1 e2 = do
-    let joined = V.fromList . catMaybes . zipWith groupDataSets e1 $ e2
+    let joined = VU.fromList . catMaybes . zipWith groupDataSets e1 $ e2
 
-    lengthCheck <- if V.length joined > 2 then Just joined else Nothing
+    lengthCheck <- if VU.length joined > 2 then Just joined else Nothing
 
     let (Rho !coeff, P !pVal) = spearmanCorrelate lengthCheck
 
@@ -218,14 +218,14 @@ spearmanCorrelateEntities e1 e2 = do
     return threshCheck
 
 -- | Correlate two lists with p values.
-spearmanCorrelate :: V.Vector (Double, Double) -> (Rho, P)
+spearmanCorrelate :: VU.Vector (Double, Double) -> (Rho, P)
 spearmanCorrelate xs =
     (Rho coeff, P (pVal s))
   where
-    n     = fromIntegral . V.length $ xs
+    n     = fromIntegral . VU.length $ xs
     coeff = spearman xs
     s     = coeff * ((sqrt (n - 2)) / (1 - (coeff ^ 2)))
-    pVal stat = 2 * (complCumulative (studentT (fromIntegral $ V.length xs - 2)) . abs $ stat)
+    pVal stat = 2 * (complCumulative (studentT (fromIntegral $ VU.length xs - 2)) . abs $ stat)
 
 -- | Complete R version.
 -- Take one level and get the similarity matrix by using correlations (a

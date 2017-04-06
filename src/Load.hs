@@ -32,6 +32,7 @@ import Data.Function (on)
 
 -- Cabal
 import qualified Data.Vector as V
+import qualified Data.Vector.Unboxed as VU
 import qualified Data.Vector.Storable as VS
 import qualified Data.Text as T
 import Data.Graph.Inductive
@@ -96,7 +97,7 @@ filterEntitiesStdDev (StdDevThreshold threshold) levels =
                  . fmap (Set.fromList . Map.keys . Map.filter p . unLevel . snd)
                  $ levels
     p            =
-        (>= threshold) . stdDev . V.fromList . fmap _entityValue . Map.elems
+        (>= threshold) . stdDev . VU.fromList . fmap _entityValue . Map.elems
 
 -- | Get a vector of all IDs for easy indexing.
 getIDVec :: UnifiedData -> IDVec

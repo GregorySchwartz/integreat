@@ -131,13 +131,13 @@ applyRows :: (Element a, VS.Storable b)
 applyRows f = fromList . fmap f . toColumns . fromRows
 
 -- | Average of a vector.
-avgVec :: Vector Double -> Double
-avgVec xs = VS.sum xs / (fromIntegral $ VS.length xs)
+avgVec :: (Num a, Fractional a, VG.Vector v a) => v a -> a
+avgVec xs = VG.sum xs / (fromIntegral $ VG.length xs)
 
 -- | Average entries of a list of vectors.
-avgVecVec :: [V.Vector Double] -> V.Vector Double
-avgVecVec xs = fmap (/ genericLength xs)
-             . foldl1' (V.zipWith (+))
+avgVecVec :: (Num a, Fractional a, VG.Vector v a) => [v a] -> v a
+avgVecVec xs = VG.map (/ genericLength xs)
+             . foldl1' (VG.zipWith (+))
              $ xs
 
 -- | Get the vertex similarity matrix for two levels, erroring out if the

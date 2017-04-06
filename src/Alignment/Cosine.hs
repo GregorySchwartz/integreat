@@ -13,6 +13,7 @@ module Alignment.Cosine
     , cosineSim
     , cosineSimIMap
     , cosinePerm
+    , cosineBoot
     ) where
 
 -- Standard
@@ -35,7 +36,7 @@ import System.Random.MWC (createSystemRandom)
 import qualified Control.Foldl as Fold
 import qualified Data.Text as T
 import qualified Data.Vector as VB
-import qualified Data.Vector.Generic as V
+import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Unboxed as VU
 
 -- Local
@@ -65,7 +66,7 @@ cosineIntegrate nPerm size vMap l1 l2 e1 e2 = do
                   . unVertexSimValues
                   $ vertexSim
         vertexSim = getVertexSim l1 l2 vMap
-        
+
     fmap ( NodeCorrScores
          . VB.fromList
          . fmap snd
@@ -107,6 +108,14 @@ cosineSimFold = Fold.fold cosine
     num = Fold.Fold (\acc (x, y) -> acc + (x * y)) 0 id
     den = (*) <$> norm fst <*> norm snd
     norm f = Fold.Fold (\acc x -> acc + ((f x) ^ 2)) 0 sqrt
+
+-- | Cosine similarity of an unboxed vector.
+cosineSimVec :: VU.Vector (Double, Double) -> Double
+cosineSimVec xs = num / den
+  where
+    num  = VU.sum . VU.map (\(!x, !y) -> x * y) $ xs
+    den  = (norm . VU.map fst $ xs) * (norm . VU.map snd $ xs)
+    norm = sqrt . VU.sum . VU.map (^ 2)
 
 -- | Get the cosine similarity and the p value of that similarity through the
 -- permutation test by shuffling non-zero edges of the second vertex.
@@ -163,7 +172,8 @@ cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
     return (obs, Just pVal)
 
 -- | Get the cosine similarity and the bootstrap using the edge distribution
--- from the second network.
+-- from the second network. These are special IntMaps where the key is the index
+-- of a sparse vector.
 cosineBoot
     :: Permutations
     -> Size
@@ -175,12 +185,11 @@ cosineBoot (Permutations nPerm) (Size size) xs ys = do
         originalSample = VU.fromList . fmap fromIntegral $ [0..size - 1]
         xsVec          = imapToVec (Size size) 0 xs
         ysVec          = imapToVec (Size size) 0 ys
-        xsYSVec        = VB.zip xsVec ysVec
+        xsYSVec        = VU.zip xsVec ysVec
         bootstrapFunc :: Sample -> Double
         bootstrapFunc = (\x -> if isNaN x then 0 else x) -- Convert NaN values to 0. Whether this should be done or not is a matter of opinion.
-                      . cosineSimFold
-                      . fmap (\x -> xsYSVec VB.! truncate x)
-                      . (\x -> VU.convert x :: VB.Vector Double)
+                      . cosineSimVec
+                      . VU.map (\x -> xsYSVec VU.! truncate x)
 
     g <- createSystemRandom
 
@@ -280,14 +289,14 @@ randomCosine (EdgeValues edgeVals) xs ys = do
     return . cosineSimIMap xs $ shuffledYS
 
 -- | Sample map values from the complete set of values.
-getSampleMap :: (V.Vector v a) => v a -> IMap.IntMap a -> IO (IMap.IntMap a)
+getSampleMap :: (VG.Vector v a) => v a -> IMap.IntMap a -> IO (IMap.IntMap a)
 getSampleMap vals m = do
     let keys = IMap.keys m
-        len = V.length vals - 1
+        len = VG.length vals - 1
 
     newIdxs <- sample . replicateM (IMap.size m) . uniform 0 $ len
 
-    return . IMap.fromList . zip keys . fmap (vals V.!) $ newIdxs
+    return . IMap.fromList . zip keys . fmap (vals VG.!) $ newIdxs
 
 -- | Random shuffle cosine.
 shuffleCosine :: IMap.IntMap Double
