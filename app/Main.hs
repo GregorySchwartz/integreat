@@ -34,16 +34,16 @@ import qualified Data.Text.IO as T
 import qualified Data.Vector as V
 import Options.Generic
 
-import qualified Foreign.R as R
-import Language.R.Instance as R
-import Language.R.QQ
+-- import qualified Foreign.R as R
+-- import Language.R.Instance as R
+-- import Language.R.QQ
 
 -- Local
 import Types
 import Utility
 import Load
 import Edge.Correlation
-import Edge.Aracne
+-- import Edge.Aracne
 -- import Alignment.CSRW
 import Integrate
 import Print
@@ -56,7 +56,7 @@ data Options = Options { dataInput          :: Maybe String
                        , entityDiff         :: Maybe T.Text
                                            <?> "([Nothing] | STRING) When comparing entities that are the same, ignore the text after this separator. Used for comparing phosphorylated positions with another level. For example, if we have a strings ARG29 and ARG29_7 that we want to compare, we want to say that their value is the highest in correlation, so this string would be \"_\""
                        , alignmentMethod    :: Maybe String
-                                           <?> "([CosineSimilarity] | RandomWalker) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker based  network alignment algorithm in order to get similarity."
+                                           <?> "([CosineSimilarity] | RandomWalker | RandomWalkerSim) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker with restart based network algnment algorithm in order to get similarity. RandomWalkerSim uses a random walker with restart and actually simulates the walker to get a stochastic result."
                        , edgeMethod         :: Maybe String
                                            <?> "([SpearmanCorrelation] | KendallCorrelation | ARACNE) The method to use for the edges between entities in the coexpression matrix."
                        , walkerRestart      :: Maybe Double
@@ -81,13 +81,12 @@ instance ParseRecord Options
 -- | Get all of the required information for integration.
 getIntegrationInput
     :: Options
-    -> R s (Maybe (Set.Set ID), Maybe UnifiedData, IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
+    -> IO (Maybe (Set.Set ID), Maybe UnifiedData, IDMap, IDVec, VertexSimMap, EdgeSimMap, GrMap)
 getIntegrationInput opts = do
     let processCsv = snd . either error id
 
-    liftIO $ hPutStrLn stderr "Getting data input."
-    dataEntries   <- liftIO
-                   . fmap (processCsv . CSV.decodeByName)
+    hPutStrLn stderr "Getting data input."
+    dataEntries   <- fmap (processCsv . CSV.decodeByName)
                    . maybe CL.getContents CL.readFile
                    . unHelpful
                    . dataInput
@@ -114,19 +113,16 @@ getIntegrationInput opts = do
                 . vertexInput
                 $ opts
 
-    liftIO . hPutStrLn stderr $ "Level information (Name, Number of entities):"
-    liftIO
-        . hPutStrLn stderr
+    hPutStrLn stderr $ "Level information (Name, Number of entities):"
+    hPutStrLn stderr
         . show
         . fmap (L.over L._2 (Map.size . unLevel))
         $ levels
 
     when (isJust vertexContents)
-        . liftIO
         $ hPutStrLn stderr "Getting vertex similarities."
 
-    vertexSimMap <- liftIO
-                  . maybe
+    vertexSimMap <- maybe
                         (return . defVertexSimMap size $ levelNames)
                         (fmap (vertexCsvToLevels idMap . V.toList))
                   $ vertexContents
@@ -135,8 +131,8 @@ getIntegrationInput opts = do
                       . unHelpful
                       . edgeMethod
                       $ opts
-        getSimMat ARACNE = getSimMatAracneR size
-        getSimMat KendallCorrelation = getSimMatKendallR size
+        -- getSimMat ARACNE = getSimMatAracneR size
+        -- getSimMat KendallCorrelation = getSimMatKendallR size
         getSimMat SpearmanCorrelation = return . getSimMatSpearman
         --getSimMat SpearmanCorrelation = getSimMatSpearmanR size
         -- getSimMat KendallCorrelation = getSimMatKendall
@@ -154,19 +150,20 @@ getIntegrationInput opts = do
                          )
                   $ levels
 
-    let getGrMap KendallCorrelation = getGrKendall eDiff (MaximumEdge 1) idMap
-        getGrMap ARACNE             = undefined
+    -- let getGrMap KendallCorrelation = getGrKendall eDiff (MaximumEdge 1) idMap
+        --getGrMap ARACNE             = undefined
 
-    grMap <- if edgeSimMethod == KendallCorrelation
-                then liftIO
-                   . fmap (GrMap . Map.fromList)
-                   . mapM ( L.sequenceOf L._2
-                           . L.over L._2 ( getGrMap edgeSimMethod
-                                           . standardizeLevel idMap
-                                           )
-                           )
-                   $ levels
-                else return . GrMap $ Map.empty
+    -- grMap <- if edgeSimMethod == KendallCorrelation
+    --             then liftIO
+    --                . fmap (GrMap . Map.fromList)
+    --                . mapM ( L.sequenceOf L._2
+    --                        . L.over L._2 ( getGrMap edgeSimMethod
+    --                                        . standardizeLevel idMap
+    --                                        )
+    --                        )
+    --                $ levels
+    --             else return . GrMap $ Map.empty
+    let grMap = GrMap Map.empty
 
     return (Nothing, Just unifiedData, idMap, idVec, vertexSimMap, edgeSimMap, grMap)
 
@@ -202,63 +199,70 @@ main = do
                       \ Integrate data from multiple sources to find consistent\
                       \ (or inconsistent) entities."
 
-    hPutStrLn stderr "Starting R thread within Haskell."
+    (truthSet, unifiedData, idMap, idVec, vertexSimMap, edgeSimMap, grMap) <-
+        bool (getIntegrationInput opts) (getPremadeIntegrationInput opts)
+            . unHelpful
+            . premade
+            $ opts
 
-    R.withEmbeddedR R.defaultConfig $ R.runRegion $ do
-        (truthSet, unifiedData, idMap, idVec, vertexSimMap, edgeSimMap, grMap) <-
-            bool (getIntegrationInput opts) (liftIO $ getPremadeIntegrationInput opts)
+    let alignment =
+            maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts
+        size      = Size . Map.size . unIDMap $ idMap
+        nPerm     =
+            Permutations . fromMaybe 1000 . unHelpful . permutations $ opts
+
+    hPutStrLn
+        stderr
+        "Calculating vertex similarities and bootstraps between networks."
+
+    nodeCorrScoresMap <- case alignment of
+        CosineSimilarity ->
+            integrateCosineSim nPerm size vertexSimMap edgeSimMap
+        RandomWalker     ->
+            integrateWalker
+                nPerm
+                size
+                ( WalkerRestart
+                . fromMaybe 0.25
                 . unHelpful
-                . premade
+                . walkerRestart
                 $ opts
+                )
+                edgeSimMap
+        RandomWalkerSim ->
+            integrateWalkerSim
+                ( WalkerRestart
+                . fromMaybe 0.25
+                . unHelpful
+                . walkerRestart
+                $ opts
+                )
+                (Counter . fromMaybe 100 . unHelpful . steps $ opts)
+                grMap
+        -- CSRW -> liftIO
+        --     $ integrateCSRW
+        --         vertexSimMap
+        --         edgeSimMap
+        --         ( WalkerRestart
+        --         . fromMaybe 0.05
+        --         . unHelpful
+        --         . walkerRestart
+        --         $ opts
+        --         )
+        --         (Counter . fromMaybe 100 . unHelpful . steps $ opts)
 
-        let alignment =
-                maybe CosineSimilarity read . unHelpful . alignmentMethod $ opts
-            size      = Size . Map.size . unIDMap $ idMap
-            nPerm     =
-                Permutations . fromMaybe 1000 . unHelpful . permutations $ opts
+    hPutStrLn stderr "Calculating node correspondence scores."
 
-        liftIO $
-            hPutStrLn stderr "Calculating vertex similarities and bootstraps between networks."
+    nodeCorrScoresInfo <- getNodeCorrScoresInfo nodeCorrScoresMap
 
-        nodeCorrScoresMap <- case alignment of
-            CosineSimilarity -> liftIO
-                $ integrateCosineSim nPerm size vertexSimMap edgeSimMap
-            RandomWalker -> liftIO
-                $ integrateWalker
-                    ( WalkerRestart
-                    . fromMaybe 0.25
-                    . unHelpful
-                    . walkerRestart
-                    $ opts
-                    )
-                    (Counter . fromMaybe 100 . unHelpful . steps $ opts)
-                    grMap
-            -- CSRW -> liftIO
-            --     $ integrateCSRW
-            --         vertexSimMap
-            --         edgeSimMap
-            --         ( WalkerRestart
-            --         . fromMaybe 0.05
-            --         . unHelpful
-            --         . walkerRestart
-            --         $ opts
-            --         )
-            --         (Counter . fromMaybe 100 . unHelpful . steps $ opts)
+    if unHelpful . test $ opts
+        then T.putStr
+            . maybe
+                    (error "Truth set not found.")
+                    (\x -> showAccuracy x idVec nodeCorrScoresInfo)
+            $ truthSet
+        else T.putStr
+            . printNodeCorrScores idVec unifiedData nodeCorrScoresMap
+            $ nodeCorrScoresInfo
 
-        liftIO $ hPutStrLn stderr "Calculating node correspondence scores."
-
-        nodeCorrScoresInfo <- getNodeCorrScoresInfo nodeCorrScoresMap
-
-        if unHelpful . test $ opts
-            then liftIO
-               . T.putStr
-               . maybe
-                       (error "Truth set not found.")
-                       (\x -> showAccuracy x idVec nodeCorrScoresInfo)
-               $ truthSet
-            else liftIO
-               . T.putStr
-               . printNodeCorrScores idVec unifiedData nodeCorrScoresMap
-               $ nodeCorrScoresInfo
-
-        return ()
+    return ()

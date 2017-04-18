@@ -13,6 +13,7 @@ module Utility
     ( minMaxNorm
     , subsetIMap
     , imapToVec
+    , imapMatToMat
     , lookupWithError
     -- , getNeighbors
     , largestLeftEig
@@ -31,9 +32,9 @@ module Utility
     , sameWithEntityDiff
     , groupDataSets
     , fillIntMap
-    , standardLevelToRJSON
-    , rToMat
-    , rToMatJSON
+    -- , standardLevelToRJSON
+    -- , rToMat
+    -- , rToMatJSON
     , getAccuracy
     ) where
 
@@ -58,11 +59,11 @@ import qualified Data.Aeson as JSON
 import Control.Lens
 import Numeric.LinearAlgebra
 
-import qualified Foreign.R as R
-import Language.R.Instance as R
-import Language.R.QQ
-import qualified Language.R.Literal as R
-import H.Prelude
+-- import qualified Foreign.R as R
+-- import Language.R.Instance as R
+-- import Language.R.QQ
+-- import qualified Language.R.Literal as R
+-- import H.Prelude
 
 -- Local
 import Types
@@ -79,6 +80,20 @@ subsetIMap idx = flip IMap.intersection (IMap.fromList . zip idx $ [0..])
 imapToVec :: (VG.Vector v a, Show a) => Size -> a -> IMap.IntMap a -> v a
 imapToVec (Size size) filler =
     (VG.//) (VG.replicate size filler) . IMap.toAscList
+    
+-- | Convert an IntMap of IntMap to a square matrix with a filler.
+imapMatToMat :: Size
+             -> Double
+             -> IMap.IntMap (IMap.IntMap Double)
+             -> Matrix Double
+imapMatToMat (Size size) filler =
+    assoc (size, size) filler
+        . concatMap (\ (!row, !v)
+                    -> fmap (\ (!col, !v)
+                            -> ((row, col), v)
+                            ) . IMap.toAscList $ v
+                    )
+        . IMap.toAscList
 
 -- | Map lookup with a custom error if the value is not found.
 lookupWithError :: (Ord a) => String -> a -> Map.Map a b -> b
@@ -244,83 +259,83 @@ rankNodeCorrScores (IDVec idVec) = zip [1..]
 --     [r| as.data.frame(fromJSON(cargo_hs)) |]
 
 -- | Convert a standard level to an R data frame.
-standardLevelToRJSON :: StandardLevel -> R.R s (R.SomeSEXP s)
-standardLevelToRJSON (StandardLevel level) = do
-    let input = Map.map ((fmap . fmap) _entityValue)
-              . Map.mapKeys (show . snd)
-              $ level
-        cargo = B.unpack . JSON.encode $ input
+-- standardLevelToRJSON :: StandardLevel -> R.R s (R.SomeSEXP s)
+-- standardLevelToRJSON (StandardLevel level) = do
+--     let input = Map.map ((fmap . fmap) _entityValue)
+--               . Map.mapKeys (show . snd)
+--               $ level
+--         cargo = B.unpack . JSON.encode $ input
 
-    -- Need to make a copy of the cargo for some reason or there is a chance of
-    -- a segmentation fault. Can probably use canonical method when the parser
-    -- is implemented in inline-r.
-    [r| suppressPackageStartupMessages(library(jsonlite));
-        suppressPackageStartupMessages(library(gtools));
-        suppressPackageStartupMessages(library(data.table));
-        write("Sending JSON matrix to R.", stderr());
-        print(cargo_hs)
-        cargo = copy(cargo_hs);
-        print(cargo)
-        ls = fromJSON(cargo);
-        ls = ls[mixedsort(names(ls))];
-        df = as.data.frame(ls);
-        df[is.na(df)] = 0;
-        df
-    |]
+--     -- Need to make a copy of the cargo for some reason or there is a chance of
+--     -- a segmentation fault. Can probably use canonical method when the parser
+--     -- is implemented in inline-r.
+--     [r| suppressPackageStartupMessages(library(jsonlite));
+--         suppressPackageStartupMessages(library(gtools));
+--         suppressPackageStartupMessages(library(data.table));
+--         write("Sending JSON matrix to R.", stderr());
+--         print(cargo_hs)
+--         cargo = copy(cargo_hs);
+--         print(cargo)
+--         ls = fromJSON(cargo);
+--         ls = ls[mixedsort(names(ls))];
+--         df = as.data.frame(ls);
+--         df[is.na(df)] = 0;
+--         df
+--     |]
 
 -- | Convert an R matrix to a matrix. Remove non-zero values when putting into a
 -- map.
-rToMat :: Size -> R.SomeSEXP s -> R.R s (IMap.IntMap (IMap.IntMap Double))
-rToMat (Size size) mat = do
-    [r| suppressPackageStartupMessages(library(reshape2)) |]
-    df <- [r| mat = as.matrix(mat_hs);
-              mat[is.na(mat)] = 0;
-              df = melt(mat);
-              df = df[df$value != 0,]
-              df
-          |]
+-- rToMat :: Size -> R.SomeSEXP s -> R.R s (IMap.IntMap (IMap.IntMap Double))
+-- rToMat (Size size) mat = do
+--     [r| suppressPackageStartupMessages(library(reshape2)) |]
+--     df <- [r| mat = as.matrix(mat_hs);
+--               mat[is.na(mat)] = 0;
+--               df = melt(mat);
+--               df = df[df$value != 0,]
+--               df
+--           |]
 
-    var1 <- [r| as.numeric(gsub("V", "", gsub("X", "", df_hs$Var1))) |]
-    var2 <- [r| as.numeric(gsub("V", "", gsub("X", "", df_hs$Var2))) |]
-    val <-  [r| as.numeric(df_hs$value) |]
+--     var1 <- [r| as.numeric(gsub("V", "", gsub("X", "", df_hs$Var1))) |]
+--     var2 <- [r| as.numeric(gsub("V", "", gsub("X", "", df_hs$Var2))) |]
+--     val <-  [r| as.numeric(df_hs$value) |]
 
-    let v1 = R.fromSomeSEXP var1 :: [Double]
-        v2 = R.fromSomeSEXP var2 :: [Double]
-        v  = R.fromSomeSEXP val :: [Double]
-        edges = zipWith3
-                    (\ x y z -> IMap.singleton
-                                    (truncate x)
-                                    (IMap.singleton (truncate y) z)
-                    )
-                    v1
-                    v2
-                    v
+--     let v1 = R.fromSomeSEXP var1 :: [Double]
+--         v2 = R.fromSomeSEXP var2 :: [Double]
+--         v  = R.fromSomeSEXP val :: [Double]
+--         edges = zipWith3
+--                     (\ x y z -> IMap.singleton
+--                                     (truncate x)
+--                                     (IMap.singleton (truncate y) z)
+--                     )
+--                     v1
+--                     v2
+--                     v
 
-    return . IMap.unionsWith IMap.union $ edges
+--     return . IMap.unionsWith IMap.union $ edges
 
 -- | Convert an R matrix to a matrix using JSON.
-rToMatJSON :: Size -> R.SomeSEXP s -> R.R s (Matrix Double)
-rToMatJSON (Size size) mat = do
-    [r| suppressPackageStartupMessages(library(jsonlite));
-        write("Sending JSON matrix from R to Haskell.", stderr())
-    |]
+-- rToMatJSON :: Size -> R.SomeSEXP s -> R.R s (Matrix Double)
+-- rToMatJSON (Size size) mat = do
+--     [r| suppressPackageStartupMessages(library(jsonlite));
+--         write("Sending JSON matrix from R to Haskell.", stderr())
+--     |]
 
-    package <- [r| toJSON(as.data.frame(mat_hs)) |]
+--     package <- [r| toJSON(as.data.frame(mat_hs)) |]
 
-    let replaceBadR = replace "\"}" ("}" :: B.ByteString)
-                    . replace "\"_row\":\"" ("\"_row\":" :: B.ByteString)
-                    . replace "X" ("" :: B.ByteString)
-                    . replace "NA" ("0" :: B.ByteString)
-        lsls        = JSON.eitherDecode (replaceBadR . B.pack $ (R.fromSomeSEXP package :: String))
-                   :: Either String ([Map.Map String Double])
-        toUsable m = fmap (\(!row, (!col, !val)) -> ((truncate row, read col), val))
-                   . zip (repeat (m Map.! "_row"))
-                   . Map.toList
-                   . Map.delete "_row"
-                   $ m
-        newMat = concatMap toUsable . either error id $ lsls
+--     let replaceBadR = replace "\"}" ("}" :: B.ByteString)
+--                     . replace "\"_row\":\"" ("\"_row\":" :: B.ByteString)
+--                     . replace "X" ("" :: B.ByteString)
+--                     . replace "NA" ("0" :: B.ByteString)
+--         lsls        = JSON.eitherDecode (replaceBadR . B.pack $ (R.fromSomeSEXP package :: String))
+--                    :: Either String ([Map.Map String Double])
+--         toUsable m = fmap (\(!row, (!col, !val)) -> ((truncate row, read col), val))
+--                    . zip (repeat (m Map.! "_row"))
+--                    . Map.toList
+--                    . Map.delete "_row"
+--                    $ m
+--         newMat = concatMap toUsable . either error id $ lsls
 
-    return . assoc (size, size) 0 $ newMat
+--     return . assoc (size, size) 0 $ newMat
 
 -- | Get the accuracy of a run. In this case, we get the total rank below the
 -- number of permuted vertices divided by the theoretical maximum (so if there were

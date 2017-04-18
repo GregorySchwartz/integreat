@@ -144,6 +144,10 @@ data Entity = Entity { _entityID    :: !ID
                      }
               deriving (Eq, Ord, Show)
 
+data VectorType
+    = IntMapContainer (IMap.IntMap Double)
+    | VectorContainer (Vector Double)
+
 data Environment =
     Environment { eGr     :: !LevelGr
                 , restart :: !WalkerRestart
@@ -160,9 +164,10 @@ data WalkerChoice    = Same | DifferentLeft | DifferentRight
 data AlignmentMethod
     = CosineSimilarity
     | RandomWalker
-    deriving (Eq,Read,Show)
-    -- | CSRW
-data EdgeMethod = ARACNE | SpearmanCorrelation | KendallCorrelation deriving (Eq,Read,Show)
+    | RandomWalkerSim
+    deriving (Eq,Read,Show)-- | CSRW
+--data EdgeMethod = ARACNE | SpearmanCorrelation | KendallCorrelation deriving (Eq,Read,Show)
+data EdgeMethod = SpearmanCorrelation deriving (Eq,Read,Show)
 
 data DataEntry    = DataEntry { dataLevel     :: !T.Text
                               , dataReplicate :: !T.Text

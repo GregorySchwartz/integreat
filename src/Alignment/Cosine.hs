@@ -7,6 +7,7 @@ similarity.
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
 
 module Alignment.Cosine
     ( cosineIntegrate
@@ -31,7 +32,7 @@ import Data.Random
 import Numeric.LinearAlgebra hiding ((<>))
 import Statistics.Resampling
 import Statistics.Resampling.Bootstrap
-import Statistics.Types
+import "statistics" Statistics.Types
 import System.Random.MWC (createSystemRandom)
 import qualified Control.Foldl as Fold
 import qualified Data.Text as T
@@ -74,6 +75,7 @@ cosineIntegrate nPerm size vMap l1 l2 e1 e2 = do
          . fillIntMap size
          )
         . mapConcurrently (uncurry (cosineBoot nPerm size))
+        . fmap (over both IntMapContainer)
         . IMap.intersectionWith (,) newE1
         $ newE2
 
@@ -177,15 +179,17 @@ cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
 cosineBoot
     :: Permutations
     -> Size
-    -> IMap.IntMap Double
-    -> IMap.IntMap Double
+    -> VectorType
+    -> VectorType
     -> IO (Double, Maybe Statistic)
 cosineBoot (Permutations nPerm) (Size size) xs ys = do
-    let obs            = cosineSimIMap xs ys
+    let obs            = case (xs, ys) of
+                            (IntMapContainer !xs, IntMapContainer !ys) -> cosineSimIMap xs ys
+                            (VectorContainer !xs, VectorContainer !ys) -> cosineSim xs ys
         originalSample = VU.fromList . fmap fromIntegral $ [0..size - 1]
-        xsVec          = imapToVec (Size size) 0 xs
-        ysVec          = imapToVec (Size size) 0 ys
-        xsYSVec        = VU.zip xsVec ysVec
+        toVec (IntMapContainer xs) = (imapToVec (Size size) 0 $ xs) :: VU.Vector Double
+        toVec (VectorContainer xs) = VU.convert xs
+        xsYSVec        = VU.zip (toVec xs) . toVec $ ys
         bootstrapFunc :: Sample -> Double
         bootstrapFunc = (\x -> if isNaN x then 0 else x) -- Convert NaN values to 0. Whether this should be done or not is a matter of opinion.
                       . cosineSimVec

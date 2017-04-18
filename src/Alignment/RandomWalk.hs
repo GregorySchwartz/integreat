@@ -8,7 +8,8 @@ Collections the functions pertaining to random walk over the network.
 {-# LANGUAGE DuplicateRecordFields #-}
 
 module Alignment.RandomWalk
-    ( randomWalkerScore
+    ( randomWalkerScoreSim
+    , randomWalkerScore
     ) where
 
 -- Standard
@@ -19,14 +20,15 @@ import Data.Tuple
 import qualified Data.IntMap.Strict as IMap
 
 -- Cabal
-import qualified Data.Vector as V
-import qualified Data.Vector.Storable as VS
-import qualified Data.Text as T
-import Data.Graph.Inductive
-import Data.Random
+import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Lens
+import Data.Graph.Inductive
+import Numeric.LinearAlgebra
+import qualified Data.Random as R
+import qualified Data.Text as T
+import qualified Data.Vector as V
+import qualified Data.Vector.Storable as VS
 
 -- Local
 import Types
@@ -66,7 +68,7 @@ weightsToProbs xs = flip zip vertices
 randomNeighbor :: Adj Double -> IO (Maybe Int)
 randomNeighbor [] = return Nothing
 randomNeighbor ns = do
-    stepQuery <- sample (Uniform 0 1 :: Uniform Double)
+    stepQuery <- R.sample (R.Uniform 0 1 :: R.Uniform Double)
     return
         . Just
         . snd
@@ -83,7 +85,7 @@ getWalkDist counterStop counter = do
 
     restartThreshold <-
         fmap (unWalkerRestart . (restart :: (Environment -> WalkerRestart))) ask
-    restartQuery     <- liftIO $ sample (Uniform 0 1 :: Uniform Double)
+    restartQuery     <- liftIO $ R.sample (R.Uniform 0 1 :: R.Uniform Double)
 
     v' <- if restartQuery <= restartThreshold
             then do
@@ -117,14 +119,14 @@ evalWalker walkerRestart counterStop gr v = do
                        , v0      = v
                        }
 
--- | Get the node correspondence score of a vertex between two levels.
-randomWalkerScore :: WalkerRestart
-                  -> Counter
-                  -> LevelGr
-                  -> LevelGr
-                  -> Int
-                  -> IO Double
-randomWalkerScore walkerRestart counterStop gr1 gr2 v = do
+-- | Get the node correspondence score of a vertex between two levels. Simulation.
+randomWalkerScoreSim :: WalkerRestart
+                     -> Counter
+                     -> LevelGr
+                     -> LevelGr
+                     -> Int
+                     -> IO Double
+randomWalkerScoreSim walkerRestart counterStop gr1 gr2 v = do
     gr1Dist <- fmap (IMap.map fromIntegral)
              . evalWalker walkerRestart counterStop gr1
              $ v
@@ -133,3 +135,42 @@ randomWalkerScore walkerRestart counterStop gr1 gr2 v = do
              $ v
 
     return . cosineSimIMap gr1Dist $ gr2Dist
+
+-- | Transform edge weights to probabilities in a matrix.
+weightsToProbsMat :: Matrix R -> Matrix R
+weightsToProbsMat =
+    fromRows . fmap toProb . toRows . abs
+  where
+    toProb :: Vector R -> Vector R
+    toProb xs =
+        case sumElements xs of
+            0 -> cmap (/ (fromIntegral . Numeric.LinearAlgebra.size $ xs)) xs
+            x -> cmap (/ x) xs
+
+-- | Get the stationary distribution HotNet2 style from a weighted adjacency
+-- matrix.
+getStationaryDist :: Size -> WalkerRestart -> Matrix Double -> Matrix Double
+getStationaryDist (Size s) (WalkerRestart r) m =
+    scalar r * (inv $ ident s - (scalar (1 - r) * weightsToProbsMat m))
+
+-- | Get the node correspondence score of all vertices between two matrices.
+randomWalkerScore :: Permutations
+                  -> Size
+                  -> WalkerRestart
+                  -> EdgeSimMatrix
+                  -> EdgeSimMatrix
+                  -> IO NodeCorrScores
+randomWalkerScore nPerm size walkerRestart m1 m2 = do
+    let getSteadyStates = toRows
+                        . getStationaryDist size walkerRestart
+                        . imapMatToMat size 0
+                        . unEdgeSimMatrix
+
+    fmap (NodeCorrScores . V.fromList)
+        . sequence
+        . zipWith
+            (cosineBoot nPerm size)
+            (fmap VectorContainer . getSteadyStates $ m1)
+        . fmap VectorContainer
+        . getSteadyStates
+        $ m2

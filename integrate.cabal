@@ -1,5 +1,5 @@
 name:                integrate
-version:             0.2.0.10
+version:             0.2.1.0
 synopsis:            Integrate different assays.
 description:         Please see README.md
 homepage:            http://github.com/GregorySchwartz/integrate#readme
@@ -19,7 +19,7 @@ library
                      , Utility
                      , Load
                      , Edge.Correlation
-                     , Edge.Aracne
+                     -- , Edge.Aracne
                      , Alignment.Cosine
                      , Alignment.RandomWalk
                      -- , Alignment.CSRW
@@ -34,12 +34,13 @@ library
                      , fgl
                      , foldl
                      , hmatrix
-                     , inline-r
+                     --, inline-r
                      , lens
                      , mtl
                      , mwc-random
                      , parallel
                      , random-fu
+                     , rank-product
                      , sequence
                      , statistics
                      , stringsearch
@@ -59,7 +60,7 @@ executable integrate
                      , bytestring
                      , cassava
                      , containers
-                     , inline-r
+                     --, inline-r
                      , lens
                      , mtl
                      , optparse-generic
