@@ -36,6 +36,7 @@ module Utility
     -- , rToMat
     -- , rToMatJSON
     , getAccuracy
+    , nub'
     ) where
 
 -- Standard
@@ -362,3 +363,7 @@ getAccuracy truth (IDVec idVec) =
          . sum
          . fmap ((V.length idVec - length truth) -)
          $ [0..(length truth - 1)]
+
+-- | Faster nub.
+nub' :: (Eq a, Ord a) => [a] -> [a]
+nub' = Set.toList . Set.fromList

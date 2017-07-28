@@ -28,6 +28,7 @@ import qualified Data.Foldable as F
 import qualified Data.IntMap.Strict as IMap
 import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
+import qualified Data.Set as Set
 
 -- Cabal
 import Control.Monad.Trans
@@ -209,13 +210,15 @@ spearmanCorrelateEntities :: [Maybe Entity] -> [Maybe Entity] -> Maybe Double
 spearmanCorrelateEntities e1 e2 = do
     let joined = VU.fromList . catMaybes . zipWith groupDataSets e1 $ e2
 
-    lengthCheck <- if VU.length joined > 2 then Just joined else Nothing
+    guard $ ((> 1) . Set.size . Set.fromList . fmap fst . VU.toList $ joined)
+         && ((> 1) . Set.size . Set.fromList . fmap snd . VU.toList $ joined)
+         && (VU.length joined > 2)
 
-    let (Rho !coeff, P !pVal) = spearmanCorrelate lengthCheck
+    let (Rho !coeff, P !pVal) = spearmanCorrelate joined
 
-    threshCheck <- if pVal < 0.05 then Just coeff else Nothing
+    guard $ pVal < 0.05
 
-    return threshCheck
+    return coeff
 
 -- | Correlate two lists with p values.
 spearmanCorrelate :: VU.Vector (Double, Double) -> (Rho, P)
