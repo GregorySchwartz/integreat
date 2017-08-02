@@ -210,9 +210,9 @@ spearmanCorrelateEntities :: [Maybe Entity] -> [Maybe Entity] -> Maybe Double
 spearmanCorrelateEntities e1 e2 = do
     let joined = VU.fromList . catMaybes . zipWith groupDataSets e1 $ e2
 
-    guard $ ((> 1) . Set.size . Set.fromList . fmap fst . VU.toList $ joined)
-         && ((> 1) . Set.size . Set.fromList . fmap snd . VU.toList $ joined)
-         && (VU.length joined > 2)
+    guard $ (VU.length joined > 2)
+         && (not . VU.all (== (fst . VU.head $ joined)) . VU.map fst $ joined)
+         && (not . VU.all (== (snd . VU.head $ joined)) . VU.map snd $ joined)
 
     let (Rho !coeff, P !pVal) = spearmanCorrelate joined
 
