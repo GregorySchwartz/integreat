@@ -167,7 +167,7 @@ data AlignmentMethod
     | RandomWalkerSim
     deriving (Eq,Read,Show)-- | CSRW
 --data EdgeMethod = ARACNE | SpearmanCorrelation | KendallCorrelation deriving (Eq,Read,Show)
-data EdgeMethod = SpearmanCorrelation deriving (Eq,Read,Show)
+data EdgeMethod = SpearmanCorrelation | PearsonCorrelation deriving (Eq,Read,Show)
 
 data DataEntry    = DataEntry { dataLevel     :: !T.Text
                               , dataReplicate :: !T.Text

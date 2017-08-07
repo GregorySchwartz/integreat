@@ -58,7 +58,7 @@ data Options = Options { dataInput          :: Maybe String
                        , alignmentMethod    :: Maybe String
                                            <?> "([CosineSimilarity] | RandomWalker | RandomWalkerSim) The method to get integrated vertex similarity between levels. CosineSimilarity uses the cosine similarity of each  vertex in each network compared to the other vertices in  other networks. RandomWalker uses a random walker with restart based network algnment algorithm in order to get similarity. RandomWalkerSim uses a random walker with restart and actually simulates the walker to get a stochastic result."
                        , edgeMethod         :: Maybe String
-                                           <?> "([SpearmanCorrelation] | KendallCorrelation | ARACNE) The method to use for the edges between entities in the coexpression matrix."
+                                           <?> "([SpearmanCorrelation] | PearsonCorrelation ) The method to use for the edges between entities in the coexpression matrix."
                        , walkerRestart      :: Maybe Double
                                            <?> "([0.25] | PROBABILITY) For the random walker algorithm, the probability of making  a jump to a random vertex. Recommended to be the ratio of  the total number of vertices in the top 99% smallest  subnetworks to the total number of nodes in the reduced  product graph (Jeong, 2015)."
                        , steps              :: Maybe Int
@@ -133,7 +133,8 @@ getIntegrationInput opts = do
                       $ opts
         -- getSimMat ARACNE = getSimMatAracneR size
         -- getSimMat KendallCorrelation = getSimMatKendallR size
-        getSimMat SpearmanCorrelation = return . getSimMatSpearman
+        getSimMat SpearmanCorrelation = return . getSimMatCorrelation edgeSimMethod
+        getSimMat PearsonCorrelation  = return . getSimMatCorrelation edgeSimMethod
         --getSimMat SpearmanCorrelation = getSimMatSpearmanR size
         -- getSimMat KendallCorrelation = getSimMatKendall
         --                                 eDiff

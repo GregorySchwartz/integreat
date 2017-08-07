@@ -11,8 +11,8 @@ matrix using different kinds of correlations as weights.
 {-# LANGUAGE GADTs #-}
 
 module Edge.Correlation
-    ( getSimMatSpearman
-    , spearmanCorrelate
+    ( getSimMatCorrelation
+    , correlate
     -- , getGrKendall
     -- , getSimMatKendall
     -- , getSimMatKendallR
@@ -176,8 +176,8 @@ import Utility
 
 -- | Take one level and get the similarity matrix by using correlations (a
 -- co-expression network). The default value is applied to missing data.
-getSimMatSpearman :: StandardLevel -> EdgeSimMatrix
-getSimMatSpearman (StandardLevel level) = do
+getSimMatCorrelation :: EdgeMethod -> StandardLevel -> EdgeSimMatrix
+getSimMatCorrelation edgeMethod (StandardLevel level) = do
     EdgeSimMatrix
         . Fold.fold (Fold.Fold step begin extract)
         . pairs (,)
@@ -201,33 +201,37 @@ getSimMatSpearman (StandardLevel level) = do
                        )
                         query
       getCorr ((!id1, !idx1), !x) ((!id2, !idx2), !y) =
-            ((idx1, idx2), spearmanCorrelateEntities x y)
+            ((idx1, idx2), correlateEntities edgeMethod x y)
 
 -- | Correlate two groups of entities, where each group is a collection of
 -- measurements (specifically for a single type of entity, for instance
 -- a single protein).
-spearmanCorrelateEntities :: [Maybe Entity] -> [Maybe Entity] -> Maybe Double
-spearmanCorrelateEntities e1 e2 = do
+correlateEntities :: EdgeMethod
+                  -> [Maybe Entity]
+                  -> [Maybe Entity]
+                  -> Maybe Double
+correlateEntities edgeMethod e1 e2 = do
     let joined = VU.fromList . catMaybes . zipWith groupDataSets e1 $ e2
 
     guard $ (VU.length joined > 2)
          && (not . VU.all (== (fst . VU.head $ joined)) . VU.map fst $ joined)
          && (not . VU.all (== (snd . VU.head $ joined)) . VU.map snd $ joined)
 
-    let (Rho !coeff, P !pVal) = spearmanCorrelate joined
+    let (Rho !coeff, P !pVal) = correlate edgeMethod joined
 
     guard $ pVal < 0.05
 
     return coeff
 
 -- | Correlate two lists with p values.
-spearmanCorrelate :: VU.Vector (Double, Double) -> (Rho, P)
-spearmanCorrelate xs =
-    (Rho coeff, P (pVal s))
+correlate :: EdgeMethod -> VU.Vector (Double, Double) -> (Rho, P)
+correlate method xs =
+    (Rho (coeff method), P (pVal s))
   where
     n     = fromIntegral . VU.length $ xs
-    coeff = spearman xs
-    s     = coeff * ((sqrt (n - 2)) / (1 - (coeff ^ 2)))
+    coeff SpearmanCorrelation = spearman xs
+    coeff PearsonCorrelation  = pearson xs
+    s     = coeff method * ((sqrt (n - 2)) / (1 - (coeff method ^ 2)))
     pVal stat = 2 * (complCumulative (studentT (fromIntegral $ VU.length xs - 2)) . abs $ stat)
 
 -- | Complete R version.
