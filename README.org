@@ -6,14 +6,25 @@
 can be easily extended to differential integration by including samples from
 multiple phenotypes, such as disease and control.
 
+** Installation
+
+#+BEGIN_SRC sh
+stack install integreat
+#+END_SRC
+
 ** Sample usage
 
 *** Integration with sample abundances
 
-    =integreat --dataInput in.csv --alignmentMethod CosineSimilarity --edgeMethod SpearmanCorrelation=
+#+BEGIN_SRC sh
+integreat --dataInput in.csv --alignmentMethod CosineSimilarity --edgeMethod SpearmanCorrelation
+#+END_SRC
 
 *** Integration with pre-calculated network
-    =integrate --dataInput in.csv --premade --alignmentMethod CosineSimilarity=
+
+#+BEGIN_SRC sh
+=integrate --dataInput in.csv --premade --alignmentMethod CosineSimilarity=
+#+END_SRC
 
 ** Documentation
 
