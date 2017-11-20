@@ -131,15 +131,8 @@ getIntegrationInput opts = do
                       . unHelpful
                       . edgeMethod
                       $ opts
-        -- getSimMat ARACNE = getSimMatAracneR size
-        -- getSimMat KendallCorrelation = getSimMatKendallR size
         getSimMat SpearmanCorrelation = return . getSimMatCorrelation edgeSimMethod
         getSimMat PearsonCorrelation  = return . getSimMatCorrelation edgeSimMethod
-        --getSimMat SpearmanCorrelation = getSimMatSpearmanR size
-        -- getSimMat KendallCorrelation = getSimMatKendall
-        --                                 eDiff
-        --                                 (MaximumEdge 1)
-        --                                 idMap
 
     liftIO $ hPutStrLn stderr "Getting edge similarities."
 
@@ -151,19 +144,6 @@ getIntegrationInput opts = do
                          )
                   $ levels
 
-    -- let getGrMap KendallCorrelation = getGrKendall eDiff (MaximumEdge 1) idMap
-        --getGrMap ARACNE             = undefined
-
-    -- grMap <- if edgeSimMethod == KendallCorrelation
-    --             then liftIO
-    --                . fmap (GrMap . Map.fromList)
-    --                . mapM ( L.sequenceOf L._2
-    --                        . L.over L._2 ( getGrMap edgeSimMethod
-    --                                        . standardizeLevel idMap
-    --                                        )
-    --                        )
-    --                $ levels
-    --             else return . GrMap $ Map.empty
     let grMap = GrMap Map.empty
 
     return (Nothing, Just unifiedData, idMap, idVec, vertexSimMap, edgeSimMap, grMap)
@@ -240,17 +220,6 @@ main = do
                 )
                 (Counter . fromMaybe 100 . unHelpful . steps $ opts)
                 grMap
-        -- CSRW -> liftIO
-        --     $ integrateCSRW
-        --         vertexSimMap
-        --         edgeSimMap
-        --         ( WalkerRestart
-        --         . fromMaybe 0.05
-        --         . unHelpful
-        --         . walkerRestart
-        --         $ opts
-        --         )
-        --         (Counter . fromMaybe 100 . unHelpful . steps $ opts)
 
     hPutStrLn stderr "Calculating node correspondence scores."
 

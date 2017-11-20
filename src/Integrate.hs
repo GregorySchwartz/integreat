@@ -33,17 +33,11 @@ import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 
--- import qualified Foreign.R as R
--- import Language.R.Instance as R
--- import Language.R.Literal as R
--- import Language.R.QQ
-
 -- Local
 import Types
 import Utility
 import Alignment.Cosine
 import Alignment.RandomWalk
--- import Alignment.CSRW
 
 -- | Do integration using cosine similarity.
 integrateCosineSim :: Permutations
@@ -121,26 +115,6 @@ integrateWalkerSim walkerRestart counterStop (GrMap grMap) =
                      . nodes
                      $ gr1
 
--- -- | Use integration using a random walker "CSRW".
--- integrateCSRW
---     :: VertexSimMap
---     -> EdgeSimMap
---     -> WalkerRestart
---     -> Counter
---     -> IO NodeCorrScoresMap
--- integrateCSRW vertexSimMap edgeSimMap restart counterStop =
---       fmap (NodeCorrScoresMap . Map.fromList) . pairsM eval $ levels
---   where
---     eval !l1 !l2   = fmap ((l1, l2),)
---                    . evalWalker vertexSimMap edgeSimMap restart counterStop l1
---                    $ l2
---     levels         = Map.keys . unEdgeSimMap $ edgeSimMap
---     lookupLevel l  = lookupWithError
---                         ("Level: " ++ (T.unpack $ unLevelName l) ++ " notFound")
---                         l
---                    . unEdgeSimMap
---                    $ edgeSimMap
-
 -- | Get the average node correspondence scores.
 getAvgNodeCorrScores :: [NodeCorrScores] -> FlatNodeCorrScores
 getAvgNodeCorrScores =
@@ -150,7 +124,7 @@ getAvgNodeCorrScores =
 getRankProdNodeCorrScores :: [NodeCorrScores]
                           -> IO (FlatNodeCorrScores, PValNodeCorrScores)
 getRankProdNodeCorrScores xs = do
-    res <- RP.rankProductPermutation (RP.Permutations 1000)
+    res <- RP.rankProductPermutation (RP.Permutations 1000) RP.Descending 
          . fmap RP.Entity
          . transpose
          . fmap (V.toList . fmap fst . unNodeCorrScores)
@@ -164,45 +138,12 @@ getRankProdNodeCorrScores xs = do
         , PValNodeCorrScores . V.fromList $ pVals
         )
 
--- -- | Get the rank product and their p values of node correspondence scores. Uses
--- -- the RankProd library from R.
--- getRankProdNodeCorrScoresR :: [NodeCorrScores]
---                            -> R s (FlatNodeCorrScores, PValNodeCorrScores)
--- getRankProdNodeCorrScoresR xs = do
---     let crate = B.unpack . A.encode . fmap (fmap fst . unNodeCorrScores) $ xs
-
---     resultsDF <- [r| suppressPackageStartupMessages(library("jsonlite"));
---                      suppressPackageStartupMessages(library("RankProd"));
---                      suppressPackageStartupMessages(library("data.table"));
---                      write("Getting rank product.", stderr());
---                      crate = copy(crate_hs);
---                      df = fromJSON(crate);
---                      x = capture.output(result <- RP(t(df), rep(1, ncol(t(df))), logged=TRUE));
---                      result
---                  |]
-
---     flat  <- [r| resultsDF_hs[["RPs"]][,1] |]
---     pVals <- [r| resultsDF_hs[["pval"]][,1] |]
-
---     return
---         ( FlatNodeCorrScores . V.fromList $ (R.fromSomeSEXP flat :: [Double])
---         , PValNodeCorrScores . V.fromList $ (R.fromSomeSEXP pVals :: [Double])
---         )
-
 -- | Get all information from the node correspondence scores.
 getNodeCorrScoresInfo :: NodeCorrScoresMap
                       -> IO (V.Vector NodeCorrScoresInfo)
 getNodeCorrScoresInfo scoreMap = do
     let scores = Map.toAscList . unNodeCorrScoresMap $ scoreMap
         avgScores = getAvgNodeCorrScores . fmap snd $ scores
-        -- avgStatistic =
-        --     StatisticNodeCorrScores
-        --         . avgVecVec
-        --         . fmap ( fmap (fromMaybe 0 . fmap unPValue . snd)
-        --                . unNodeCorrScores
-        --                )
-        --         . fmap snd
-        --         $ scores
         avgStatistic :: StatisticNodeCorrScores
         avgStatistic =
             StatisticNodeCorrScores

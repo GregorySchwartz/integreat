@@ -1,5 +1,5 @@
 name:                integrate
-version:             0.2.2.0
+version:             0.2.2.1
 synopsis:            Integrate different assays.
 description:         Please see README.md
 homepage:            http://github.com/GregorySchwartz/integrate#readme
@@ -7,7 +7,7 @@ license:             GPL-3
 license-file:        LICENSE
 author:              Gregory W. Schwartz
 maintainer:          gsch@upenn.edu
-copyright:           Copyright: (c) 2016 Gregory W. Schwartz
+copyright:           Copyright: (c) 2017 Gregory W. Schwartz
 category:            Bioinformatics
 build-type:          Simple
 -- extra-source-files:
@@ -19,10 +19,8 @@ library
                      , Utility
                      , Load
                      , Edge.Correlation
-                     -- , Edge.Aracne
                      , Alignment.Cosine
                      , Alignment.RandomWalk
-                     -- , Alignment.CSRW
                      , Integrate
                      , Print
   build-depends:       base >= 4.7 && < 5
@@ -34,7 +32,6 @@ library
                      , fgl
                      , foldl
                      , hmatrix
-                     --, inline-r
                      , lens
                      , mtl
                      , mwc-random
@@ -60,7 +57,6 @@ executable integrate
                      , bytestring
                      , cassava
                      , containers
-                     --, inline-r
                      , lens
                      , mtl
                      , optparse-generic

@@ -54,8 +54,6 @@ cosineIntegrate :: Permutations
                 -> EdgeSimMatrix
                 -> IO NodeCorrScores
 cosineIntegrate nPerm size vMap l1 l2 e1 e2 = do
-    -- edgeVals :: EdgeValues
-    -- edgeVals = EdgeValues . VU.fromList . concatMap IMap.elems . IMap.elems $ newE2
     let newE1 :: IMap.IntMap (IMap.IntMap Double)
         newE1     = unEdgeSimMatrix
                   . cosineUpdateSimMat e1
@@ -154,12 +152,7 @@ cosinePermFromDist
 cosinePermFromDist (Permutations nPerm) edgeVals xs ys = do
     let obs     = cosineSimIMap xs ys
         expTest = (>= abs obs) . abs
-
-    -- Lotsa space version.
-    -- vals <- mapM (const (shuffleCosine xs ys)) . V.replicate nPerm $ 0
-    -- let exps = V.filter (\x -> abs x >= abs obs) vals
-
-    let successes :: Int -> Int -> IO Int
+        successes :: Int -> Int -> IO Int
         successes !acc 0  = return acc
         successes !acc !n = do
             res <- randomCosine edgeVals xs $ ys

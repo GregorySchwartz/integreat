@@ -60,8 +60,6 @@ newtype IDVec            = IDVec { unIDVec :: V.Vector ID }
 newtype IDMap            = IDMap { unIDMap :: Map.Map ID Int }
 newtype WalkerState      =
     WalkerState { unWalkerState :: (Int, IMap.IntMap Int) }
--- newtype WalkerStateCSRW  =
---     WalkerStateCSRW { unWalkerStateCSRW :: (Int, Int, TransProbMatrix) }
 
 newtype DataSet          = DataSet (Map.Map ID Entity)
 newtype StandardDataSets = StandardDataSets
@@ -122,15 +120,6 @@ newtype Walker a =
              , MonadReader Environment
              , MonadState WalkerState
              )
--- newtype WalkerCSRW a =
---     WalkerCSRW { unWalkerCSRW :: (ReaderT EnvironmentCSRW (StateT WalkerStateCSRW IO) a) }
---     deriving ( Functor
---              , Applicative
---              , Monad
---              , MonadIO
---              , MonadReader EnvironmentCSRW
---              , MonadState WalkerStateCSRW
---              )
 
 data Statistic
     = PValue { unPValue :: Double}
@@ -153,20 +142,13 @@ data Environment =
                 , restart :: !WalkerRestart
                 , v0      :: !Int
                 }
--- data EnvironmentCSRW =
---     EnvironmentCSRW { edgeMat1  :: !EdgeSimMatrix
---                     , edgeMat2  :: !EdgeSimMatrix
---                     , vertexMat :: !VertexSimMatrix
---                     , restart   :: !WalkerRestart
---                     }
 
 data WalkerChoice    = Same | DifferentLeft | DifferentRight
 data AlignmentMethod
     = CosineSimilarity
     | RandomWalker
     | RandomWalkerSim
-    deriving (Eq,Read,Show)-- | CSRW
---data EdgeMethod = ARACNE | SpearmanCorrelation | KendallCorrelation deriving (Eq,Read,Show)
+    deriving (Eq,Read,Show)
 data EdgeMethod = SpearmanCorrelation | PearsonCorrelation deriving (Eq,Read,Show)
 
 data DataEntry    = DataEntry { dataLevel     :: !T.Text
@@ -202,7 +184,3 @@ data NodeCorrScoresInfo = NodeCorrScoresInfo
     deriving (Show)
 
 makeLenses ''Entity
-
--- Basic
-
--- Advanced
