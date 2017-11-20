@@ -1,12 +1,12 @@
 name:                integreat
 version:             0.2.2.1
 synopsis:            Integrate different assays.
-description:         Please see README.md
+description:         Integrate difference data sources and optionally perform differential integration.
 homepage:            http://github.com/GregorySchwartz/integreat#readme
 license:             GPL-3
 license-file:        LICENSE
 author:              Gregory W. Schwartz
-maintainer:          gsch@upenn.edu
+maintainer:          gsch@mail.med.upenn.edu
 copyright:           Copyright: (c) 2017 Gregory W. Schwartz
 category:            Bioinformatics
 build-type:          Simple

@@ -44,7 +44,7 @@ import Print
 
 -- | Command line arguments
 data Options = Options { dataInput          :: Maybe String
-                                           <?> "([STDIN] | FILE) The input file containing the data intensities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base level for the experiment, like \"proteomic_cancer\" or \"RNA_cancer\" for instance), dataReplicate is the replicate in that experiment that the entity is from (the name of that data set with the replicate name, like \"RNA_cancer_1\"), and vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
+                                           <?> "([STDIN] | FILE) The input file containing the data intensities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base level for the experiment, like \"proteomic_cancer\" or \"RNA_cancer\" for instance, requires at least two levels), dataReplicate is the replicate in that experiment that the entity is from (the name of that data set with the replicate name, like \"RNA_cancer_1\"), and vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
                        , vertexInput        :: Maybe String
                                            <?> "([Nothing] | FILE) The input file containing similarities between entities. Follows the format: vertexLevel1,vertexLevel2, vertex1,vertex2,similarity. vertexLevel1 is the level (the base title for the experiment, \"data set\") that vertex1 is from, vertexLevel2 is the level that vertex2 is from, and the similarity is a number representing the similarity between those two entities. If not specified, then the same entity (determined by vertex in data-input) will have a similarity of 1, different entities will have a similarity of 0."
                        , entityDiff         :: Maybe T.Text
@@ -170,7 +170,7 @@ showAccuracy truthSet idVec nodeCorrScoresInfo =
 
 main :: IO ()
 main = do
-    opts <- getRecord "integreat, Gregory W. Schwartz\
+    opts <- getRecord "integreat, Gregory W. Schwartz.\
                       \ Integrate data from multiple sources to find consistent\
                       \ (or inconsistent) entities."
 
