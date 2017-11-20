@@ -1,8 +1,8 @@
-name:                integrate
+name:                integreat
 version:             0.2.2.1
 synopsis:            Integrate different assays.
 description:         Please see README.md
-homepage:            http://github.com/GregorySchwartz/integrate#readme
+homepage:            http://github.com/GregorySchwartz/integreat#readme
 license:             GPL-3
 license-file:        LICENSE
 author:              Gregory W. Schwartz
@@ -48,12 +48,12 @@ library
   ghc-options:         -O2
   default-language:    Haskell2010
 
-executable integrate
+executable integreat
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -O2
   build-depends:       base
-                     , integrate
+                     , integreat
                      , bytestring
                      , cassava
                      , containers
@@ -66,4 +66,4 @@ executable integrate
 
 source-repository head
   type:     git
-  location: https://github.com/GregorySchwartz/integrate
+  location: https://github.com/GregorySchwartz/integreat

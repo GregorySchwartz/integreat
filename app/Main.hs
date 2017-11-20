@@ -1,4 +1,4 @@
-{- integrate
+{- integreat
 Gregory W. Schwartz
 
 Integrate data from multiple sources to find consistent (or inconsistent)
@@ -34,23 +34,17 @@ import qualified Data.Text.IO as T
 import qualified Data.Vector as V
 import Options.Generic
 
--- import qualified Foreign.R as R
--- import Language.R.Instance as R
--- import Language.R.QQ
-
 -- Local
 import Types
 import Utility
 import Load
 import Edge.Correlation
--- import Edge.Aracne
--- import Alignment.CSRW
 import Integrate
 import Print
 
 -- | Command line arguments
 data Options = Options { dataInput          :: Maybe String
-                                           <?> "([STDIN] | FILE) The input file containing the data intensities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base level for the experiment, like \"proteomic_Myla\" or \"RNA_MyLa\" for instance), dataReplicate is the replicate in that experiment that the entity is from (the name of that data set with the replicate name, like \"RNA_MyLa_1\"), and vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
+                                           <?> "([STDIN] | FILE) The input file containing the data intensities. Follows the format: dataLevel,dataReplicate,vertex,intensity. dataLevel is the level (the base level for the experiment, like \"proteomic_cancer\" or \"RNA_cancer\" for instance), dataReplicate is the replicate in that experiment that the entity is from (the name of that data set with the replicate name, like \"RNA_cancer_1\"), and vertex is the name of the entity (must match those in the vertex-input), and the intensity is the value of this entity in this data set."
                        , vertexInput        :: Maybe String
                                            <?> "([Nothing] | FILE) The input file containing similarities between entities. Follows the format: vertexLevel1,vertexLevel2, vertex1,vertex2,similarity. vertexLevel1 is the level (the base title for the experiment, \"data set\") that vertex1 is from, vertexLevel2 is the level that vertex2 is from, and the similarity is a number representing the similarity between those two entities. If not specified, then the same entity (determined by vertex in data-input) will have a similarity of 1, different entities will have a similarity of 0."
                        , entityDiff         :: Maybe T.Text
@@ -60,7 +54,7 @@ data Options = Options { dataInput          :: Maybe String
                        , edgeMethod         :: Maybe String
                                            <?> "([SpearmanCorrelation] | PearsonCorrelation ) The method to use for the edges between entities in the coexpression matrix."
                        , walkerRestart      :: Maybe Double
-                                           <?> "([0.25] | PROBABILITY) For the random walker algorithm, the probability of making  a jump to a random vertex. Recommended to be the ratio of  the total number of vertices in the top 99% smallest  subnetworks to the total number of nodes in the reduced  product graph (Jeong, 2015)."
+                                           <?> "([0.25] | PROBABILITY) For the random walker algorithm, the probability of making  a jump to a random vertex. Recommended to be the ratio of  the total number of vertices in the top 99% smallest subnetworks to the total number of nodes in the reduced  product graph (Jeong, 2015)."
                        , steps              :: Maybe Int
                                            <?> "([100] | STEPS) For the random walker algorithm, the number of steps to take  before stopping."
                        , premade            :: Bool
@@ -176,7 +170,7 @@ showAccuracy truthSet idVec nodeCorrScoresInfo =
 
 main :: IO ()
 main = do
-    opts <- getRecord "integrate, Gregory W. Schwartz\
+    opts <- getRecord "integreat, Gregory W. Schwartz\
                       \ Integrate data from multiple sources to find consistent\
                       \ (or inconsistent) entities."
 

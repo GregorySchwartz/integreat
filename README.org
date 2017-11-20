@@ -1,0 +1,7 @@
+* inteGREAT
+
+** Description
+
+=inteGREAT= is an algorithm for integrating multiple data sources. =inteGREAT=
+can be easily extended to differential integration by including samples from
+multiple phenotypes, such as disease and control.
