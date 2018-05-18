@@ -1,5 +1,7 @@
 * inteGREAT
 
+See https://github.com/GregorySchwartz/integreat for the latest version.
+
 ** Description
 
 =inteGREAT= is an algorithm for integrating multiple data sources. =inteGREAT=
