@@ -25,7 +25,7 @@ integreat --dataInput in.csv --alignmentMethod CosineSimilarity --edgeMethod Spe
 *** Integration with pre-calculated network
 
 #+BEGIN_SRC sh
-integrate --dataInput in.csv --premade --alignmentMethod CosineSimilarity
+integreat --dataInput in.csv --premade --alignmentMethod CosineSimilarity
 #+END_SRC
 
 ** Documentation
